@@ -3,6 +3,8 @@ import __future__
 import pygame
 import sys
 import random
+import multiprocessing as mp
+
 
 # --- constants ---
 
@@ -93,4 +95,5 @@ def main(reference_signals):
 
         pygame.display.update()
 
-main(reference_signals)
+prcs = mp.Process(target=main(reference_signals),
+                       args=(reference_signals,))

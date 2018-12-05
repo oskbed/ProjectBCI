@@ -22,7 +22,6 @@ import time
 #import matplotlib.pyplot as plt
 from time import gmtime, strftime
 
-from screen import *
 
 class CcaLive(object):
     """CCA Application for SSVEP detection.
@@ -42,7 +41,7 @@ class CcaLive(object):
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='', channels=[],
-    path='', test_session=True, gui=False):
+    path='', test_session=True):
 
         self.CHANNELS = channels
         self.PATH = path
@@ -57,13 +56,11 @@ class CcaLive(object):
         self.__t = np.arange(0.0, 1.0, self.__fs)
 
         self.test_session = test_session
-        self.gui = gui
 
         self.board = bci.OpenBCICyton(port=self.bci_port)
         self.board.print_register_settings()
         self.sampling_rate = int(self.board.getSampleRate())
 
-        print ("Board connected succesfully!")
         print ("================================")
         print ("  OpenBCI Cyton CCA Application ")
         print ("================================")
@@ -90,15 +87,10 @@ class CcaLive(object):
         if self.connect:
             self.initialize()
 
-        time.sleep(5)
+        time.sleep(50)
         self.prcs.terminate()
         #self.terminate.clear()
 
-
-
-        if self.gui:
-            main(self.reference_signals)
-            self.prcs.terminate()
 
         if self.terminate.is_set():
             self.prcs.terminate()
