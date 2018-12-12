@@ -8,7 +8,7 @@
 
 
 import sys
-OpenBCI_PATH = '/home/oskar/github/NewBCI/OpenBCI_Python/'
+OpenBCI_PATH = '/Users/oskar.bedychaj/University/OpenBCI_Python'
 
 # // Load OpenBCI_Python to $PATH variable. //
 sys.path.insert(0, OpenBCI_PATH)
@@ -41,7 +41,7 @@ class CcaLive(object):
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='', channels=[],
-    path='', test_session=True):
+    path='', test_session=True, electrodes=2):
 
         self.CHANNELS = channels
         self.PATH = path
@@ -49,6 +49,7 @@ class CcaLive(object):
         self.bci_port = port
         self.connect = connect
 
+        self.electrodes = electrodes
 
         self.reference_signals = []
 
@@ -115,7 +116,7 @@ class CcaLive(object):
         # Board connection #
 
         self.correlation = CrossCorrelation(self.sampling_rate,
-                                            self.board.getNbEEGChannels(),
+                                            self.electrodes,
                                             self.ref)
 
         self.board.start_streaming(handle_sample)
