@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python -W ignore::DeprecationWarning
 # -*- coding: utf-8 -*-
 
 
@@ -41,7 +41,7 @@ class CcaLive(object):
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='', channels=[],
-    path='', test_session=True, electrodes=2):
+    path='', test_session=True, electrodes=2, time_run=10, mode=1):
 
         self.CHANNELS = channels
         self.PATH = path
@@ -50,6 +50,8 @@ class CcaLive(object):
         self.connect = connect
 
         self.electrodes = electrodes
+        self.time_run = time_run
+        self.mode = mode
 
         self.reference_signals = []
 
@@ -79,7 +81,7 @@ class CcaLive(object):
         '''Add stimuli to generate artificial signal'''
 
         self.hz = hz
-        self.reference_signals.append(SignalReference(self.hz, self.__t))
+        self.reference_signals.append(SignalReference(self.hz, self.__t, self.mode))
         print ("Stimuli of {} hz added!".format(self.hz))
 
     def decission(self):
@@ -88,7 +90,7 @@ class CcaLive(object):
         if self.connect:
             self.initialize()
 
-        time.sleep(50)
+        time.sleep(self.time_run)
         self.prcs.terminate()
         #self.terminate.clear()
 
@@ -105,10 +107,11 @@ class CcaLive(object):
         def handle_sample(sample):
             ''' Save samples into table; single process '''
 
-            self.correlation.acquire_data(sample.channel_data)
+            self.correlation.acquire_data(sample.channel_data[:self.electrodes])
 
             # Set termination
             if self.terminate.is_set():
+                #self.correlation.save()
                 self.streaming.clear()
                 self.board.stop()
 
@@ -124,24 +127,33 @@ class CcaLive(object):
 
 class SignalReference(object):
     """ Reference signal generator"""
-    def __init__(self, hz, t):
+    def __init__(self, hz, t, mode):
+        if mode == 1:
+            multiplier = 2
+        elif mode == 2:
+            multiplier = 0.5
+        else:
+            print ("Incorrect mode!")
+
         self.hz = hz
 
         self.reference = np.zeros(shape=(len(t), 4))
 
         self.reference[:, 0] = np.array([np.sin(2*np.pi*i*self.hz) for i in t]) # sin
         self.reference[:, 1] = np.array([np.cos(2*np.pi*i*self.hz) for i in t]) # cos
-        self.reference[:, 2] = np.array([np.sin(2*np.pi*i*self.hz*2) for i in t]) # harmonic sin
-        self.reference[:, 3] = np.array([np.cos(2*np.pi*i*self.hz*2) for i in t]) # harmonic cos
+        self.reference[:, 2] = np.array([np.sin(2*np.pi*i*self.hz*multiplier) for i in t]) # subharmonic sin
+        self.reference[:, 3] = np.array([np.cos(2*np.pi*i*self.hz*multiplier) for i in t]) # subharmonic cos
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
     def __init__(self, sampling_rate, channels_num, ref_signals):
+        self.signal_file = []
         self.packet_id = 0
         self.all_packets = 0
         self.sampling_rate = sampling_rate
         self.rs = ref_signals
         self.sampling_rate = sampling_rate
+        self.channels_num = channels_num
         self.signal_window = np.zeros(shape=(sampling_rate, channels_num))
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
@@ -149,6 +161,7 @@ class CrossCorrelation(object):
 
     def acquire_data(self, packet):
         self.signal_window[self.packet_id] = packet
+        self.signal_file.append(packet)
         self.packet_id += 1
 
         if self.packet_id % self.sampling_rate == 0:
@@ -158,13 +171,15 @@ class CrossCorrelation(object):
             self.make_decission()
             self.print_results()
             self.packet_id = 0
+    def save(self):
+        pass
 
     def filtering(self, packet):
         """ Push single sample into the list """
         packet = np.squeeze(np.array(packet))
 
         # Butter bandstop filter 49-51hz
-        for i in range(4):
+        for i in range(self.channels_num):
             signal = packet[:, i]
             lowcut = 49/(self.sampling_rate*0.5)
             highcut = 51/(self.sampling_rate*0.5)
@@ -172,10 +187,10 @@ class CrossCorrelation(object):
             packet[:, i] = sig.filtfilt(b, a, signal)
 
         # Butter bandpass filter 3-49hz
-        for i in range(4):
+        for i in range(self.channels_num):
             signal = packet[:, i]
-            lowcut = 3/(self.sampling_rate*0.5)
-            highcut = 49/(self.sampling_rate*0.5)
+            lowcut = 6/(self.sampling_rate*0.5)
+            highcut =  20/(self.sampling_rate*0.5)
             [b, a] = sig.butter(4, [lowcut, highcut], 'bandpass')
             packet[:, i] = sig.filtfilt(b, a, signal)
 
@@ -237,15 +252,3 @@ class CrossCorrelation(object):
                   self.channels[i][0]))
         print("Stimuli detection: {0}".format([str(self.ssvep_display[i])
               for i in range(len(self.ssvep_display))]))
-
-
-    def stats_all(self):
-
-        with open('SSVEP.txt', 'a') as f:
-            for i, j in enumerate(self.logging):
-                for z, q in enumerate(j):
-                    f.write(str(i)
-                    + ", " + str(int(q))
-                    + ", " + str(self.channels[z][0])
-                    + ", " + str(self.rs[z].hz)
-                    + "hz" + '\n')
