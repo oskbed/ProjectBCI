@@ -21,6 +21,7 @@ import scipy.signal as sig
 import time
 #import matplotlib.pyplot as plt
 from time import gmtime, strftime
+import csv
 
 
 class CcaLive(object):
@@ -41,7 +42,7 @@ class CcaLive(object):
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='', channels=[],
-    path='', test_session=True, electrodes=2, time_run=10, mode=1):
+    path='', test_session=True, electrodes=2, time_run=10, mode=1, save=False):
 
         self.CHANNELS = channels
         self.PATH = path
@@ -52,6 +53,7 @@ class CcaLive(object):
         self.electrodes = electrodes
         self.time_run = time_run
         self.mode = mode
+        self.save_to_file = save
 
         self.reference_signals = []
 
@@ -85,12 +87,16 @@ class CcaLive(object):
         print ("Stimuli of {} hz added!".format(self.hz))
 
     def decission(self):
-        status = input("Press Enter to start... ")
+        status = input("Press Enter to warm up... ")
 
         if self.connect:
             self.initialize()
 
-        time.sleep(self.time_run)
+        # Compensate for packet correlation
+        time.sleep(self.time_run+1)
+        print("".join(["=" for x in range(32)]))
+        print("END OF TRIAL")
+        print("".join(["=" for x in range(32)]))
         self.prcs.terminate()
         #self.terminate.clear()
 
@@ -111,7 +117,6 @@ class CcaLive(object):
 
             # Set termination
             if self.terminate.is_set():
-                #self.correlation.save()
                 self.streaming.clear()
                 self.board.stop()
 
@@ -120,7 +125,8 @@ class CcaLive(object):
 
         self.correlation = CrossCorrelation(self.sampling_rate,
                                             self.electrodes,
-                                            self.ref)
+                                            self.ref,
+                                            self.save_to_file)
 
         self.board.start_streaming(handle_sample)
         self.board.disconnect()
@@ -146,7 +152,7 @@ class SignalReference(object):
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
-    def __init__(self, sampling_rate, channels_num, ref_signals):
+    def __init__(self, sampling_rate, channels_num, ref_signals, save_to_file):
         self.signal_file = []
         self.packet_id = 0
         self.all_packets = 0
@@ -154,6 +160,7 @@ class CrossCorrelation(object):
         self.rs = ref_signals
         self.sampling_rate = sampling_rate
         self.channels_num = channels_num
+        self.save_to_file = save_to_file
         self.signal_window = np.zeros(shape=(sampling_rate, channels_num))
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
@@ -167,12 +174,19 @@ class CrossCorrelation(object):
         if self.packet_id % self.sampling_rate == 0:
             self.all_packets += 1
             filtered = self.filtering(self.signal_window)
+            if self.save_to_file:
+                self.save(filtered)
             self.correlate(filtered)
             self.make_decission()
             self.print_results()
             self.packet_id = 0
-    def save(self):
-        pass
+
+    def save(self,list_file):
+        myFile = open('signal.csv', 'a')
+
+        with myFile:
+            writer = csv.writer(myFile)
+            writer.writerows(list_file)
 
     def filtering(self, packet):
         """ Push single sample into the list """
