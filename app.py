@@ -8,6 +8,8 @@
 
 
 import sys
+import os
+
 OpenBCI_PATH = '/Users/oskar.bedychaj/University/OpenBCI_Python'
 
 # // Load OpenBCI_Python to $PATH variable. //
@@ -87,7 +89,7 @@ class CcaLive(object):
         print ("Stimuli of {} hz added!".format(self.hz))
 
     def decission(self):
-        status = input("Press Enter to warm up... ")
+        status = input("Press Enter to start... ")
 
         if self.connect:
             self.initialize()
@@ -175,18 +177,32 @@ class CrossCorrelation(object):
             self.all_packets += 1
             filtered = self.filtering(self.signal_window)
             if self.save_to_file:
-                self.save(filtered)
+                self.save_file(filtered)
+                self.save_file(self.channels)
+
             self.correlate(filtered)
             self.make_decission()
             self.print_results()
             self.packet_id = 0
 
-    def save(self,list_file):
-        myFile = open('signal.csv', 'a')
+    def save_file(self, list_file):
 
-        with myFile:
-            writer = csv.writer(myFile)
-            writer.writerows(list_file)
+        if list_file.shape == (self.sampling_rate, self.channels_num):
+            myFile = open('outputs/signal_filtered' + '.csv', 'a')
+
+            with myFile:
+                writer = csv.writer(myFile)
+                writer.writerows(list_file)
+
+
+        elif list_file.shape == (len(self.rs), 3):
+            myFile = open('outputs/results' + '.csv', 'a')
+
+            with myFile:
+                writer = csv.writer(myFile)
+                writer.writerows(list_file)
+        else:
+            pass
 
     def filtering(self, packet):
         """ Push single sample into the list """
