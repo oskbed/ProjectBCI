@@ -149,8 +149,8 @@ class SignalReference(object):
 
         self.reference[:, 0] = np.array([np.sin(2*np.pi*i*self.hz) for i in t]) # sin
         self.reference[:, 1] = np.array([np.cos(2*np.pi*i*self.hz) for i in t]) # cos
-        self.reference[:, 2] = np.array([np.sin(2*np.pi*i*self.hz*multiplier) for i in t]) # subharmonic sin
-        self.reference[:, 3] = np.array([np.cos(2*np.pi*i*self.hz*multiplier) for i in t]) # subharmonic cos
+        self.reference[:, 2] = np.array([np.sin(2*np.pi*i*self.hz*multiplier) for i in t]) #
+        self.reference[:, 3] = np.array([np.cos(2*np.pi*i*self.hz*multiplier) for i in t]) # 
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
