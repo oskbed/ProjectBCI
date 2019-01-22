@@ -10,8 +10,9 @@ from  helpers import *
 #==============================================================================#
 
 # Port adress of OpenBCI Cyton board
+
 # BCI_PORT = '/dev/tty.usbserial-DM00CVLC'
-BCI_PORT = path_load.PortSearch().port
+BCI_PORT = path_load.PortDiscover().port
 
 #==============================================================================#
 # Run application
@@ -27,6 +28,10 @@ BCI_PORT = path_load.PortSearch().port
 
 # Initialize app
 
+#==============================================================================#
+# CONFIGURATION
+#==============================================================================#
+
 test = app.CcaLive(
 port=BCI_PORT,
 connect=True,
@@ -35,9 +40,12 @@ time_run=20,
 mode=1,
 save=True
 )
+#==============================================================================#
+#==============================================================================#
+
 
 #==============================================================================#
-# Initialize
+# Initialize // DO NOT CHANGE ANYTHING //
 #==============================================================================#
 
 print("Number of acquired electrodes: {}".format(test.electrodes))
@@ -52,21 +60,29 @@ if test.mode == 2:
 print("".join(["=" for x in range(32)]))
 
 #==============================================================================#
-# Stimuli configuration
+# CONFIGURATION
 #==============================================================================#
 # Add references signal /
 # Stimulus for experiment. Max amount = 4.
 # ========================== #
-test.add_stimuli(12)
-test.add_stimuli(7)
 test.add_stimuli(10)
+test.add_stimuli(11)
+test.add_stimuli(12)
 # ========================== #
-#==============================================================================#
-## SUBJECT ##
 
-SUBJ = 1
+## SUBJECT NUMBER ##
+
+SUBJ = 4
 
 #==============================================================================#
+
+
+#==============================================================================#
+# LEAVE BELOW THIS PART // DO NOT CHANGE ANYTHING //
+#==============================================================================#
+
+
+
 
 
 print("".join(["=" for x in range(32)]))

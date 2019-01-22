@@ -1,6 +1,6 @@
 import os
 
-class PortSearch(object):
+class PortDiscover(object):
     def __init__(self):
         self.port = self.port_search()
     def port_search(self):
