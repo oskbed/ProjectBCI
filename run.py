@@ -34,6 +34,7 @@ BCI_PORT = path_load.PortDiscover().port
 
 test = app.CcaLive(
 port=BCI_PORT,
+sampling_rate=250,
 connect=True,
 electrodes=2,
 time_run=20,
@@ -65,14 +66,14 @@ print("".join(["=" for x in range(32)]))
 # Add references signal /
 # Stimulus for experiment. Max amount = 4.
 # ========================== #
-test.add_stimuli(10)
-test.add_stimuli(11)
 test.add_stimuli(12)
+test.add_stimuli(14)
+test.add_stimuli(16)
 # ========================== #
 
 ## SUBJECT NUMBER ##
 
-SUBJ = 4
+SUBJ = 5
 
 #==============================================================================#
 
@@ -102,3 +103,36 @@ if test.prcs.is_alive():
     print("Done!")
 
 create_subject_from_file(SUBJ)
+
+
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+dane = pd.read_csv("outputs/SUBJ"+str(SUBJ)+"-results.csv", delimiter=',', engine='python')
+
+
+bodziec_1 = []
+bodziec_2 = []
+bodziec_3 = []
+
+
+for i,j in enumerate(dane.iloc[2:,2]):
+    if i % 3 == 0:
+        bodziec_1.append(j)
+    elif i % 3 == 1:
+        bodziec_2.append(j)
+    elif i % 3 == 2:
+        bodziec_3.append(j)
+
+
+
+len(bodziec_3)
+
+plt.plot(bodziec_1, label=str(test.reference_signals[0].hz))
+plt.plot(bodziec_2, label=str(test.reference_signals[1].hz))
+plt.plot(bodziec_3, label=str(test.reference_signals[2].hz))
+plt.legend()
+#plt.title(str(input("Title: ")))
+plt.show()
+#plt.savefig(str(input("Save as ")) + '.png')

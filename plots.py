@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-dane = pd.read_csv("outputs/SUBJ4-results.csv", delimiter=',', engine='python')
+dane = pd.read_csv("outputs/SUBJ5-results.csv", delimiter=',', engine='python')
 
 
 bodziec_1 = []
@@ -20,8 +20,9 @@ for i,j in enumerate(dane.iloc[2:,2]):
 
 len(bodziec_3)
 
-plt.plot(bodziec_1, label="10")
-plt.plot(bodziec_2, label="11")
-plt.plot(bodziec_3, label="12")
+plt.plot(bodziec_1, label="8hz")
+plt.plot(bodziec_2, label="12hz")
+plt.plot(bodziec_3, label="14hz")
 plt.legend()
-plt.show()
+plt.title("FLT2/30 | SH |")
+plt.savefig('230SH.png')

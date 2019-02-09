@@ -43,18 +43,14 @@ class CcaLive(object):
         GUI Mode on/off
 
     """
-    def __init__(self, sampling_rate=250, connect=True, port='', channels=[],
-    path='', test_session=True, electrodes=2, time_run=10, mode=1, save=False):
-
-        self.CHANNELS = channels
-        self.PATH = path
+    def __init__(self, sampling_rate=250, connect=True, port='',
+    path='', electrodes=2, time_run=10, save=False, bandpass=None):
 
         self.bci_port = port
         self.connect = connect
 
         self.electrodes = electrodes
         self.time_run = time_run
-        self.mode = mode
         self.save_to_file = save
 
         self.reference_signals = []
@@ -62,11 +58,10 @@ class CcaLive(object):
         self.__fs = 1./sampling_rate
         self.__t = np.arange(0.0, 1.0, self.__fs)
 
-        self.test_session = test_session
-
         self.board = bci.OpenBCICyton(port=self.bci_port)
         self.board.print_register_settings()
-        self.sampling_rate = int(self.board.getSampleRate())
+        self.sampling_rate = sampling_rate
+        self.bandpass = bandpass
 
         print ("================================")
         print ("  OpenBCI Cyton CCA Application ")
@@ -85,8 +80,8 @@ class CcaLive(object):
         '''Add stimuli to generate artificial signal'''
 
         self.hz = hz
-        self.reference_signals.append(SignalReference(self.hz, self.__t, self.mode))
-        print ("Stimuli of {} hz added!".format(self.hz))
+        self.reference_signals.append(SignalReference(self.hz, self.__t))
+        print ("Stimuli {} hz added!".format(self.hz))
 
     def decission(self):
         status = input("Press Enter to start... ")
@@ -126,6 +121,7 @@ class CcaLive(object):
         # Board connection #
 
         self.correlation = CrossCorrelation(self.sampling_rate,
+                                            self.bandpass
                                             self.electrodes,
                                             self.ref,
                                             self.save_to_file)
@@ -136,25 +132,22 @@ class CcaLive(object):
 class SignalReference(object):
     """ Reference signal generator"""
     def __init__(self, hz, t, mode):
-        if mode == 1:
-            multiplier = 2
-        elif mode == 2:
-            multiplier = 0.5
-        else:
-            print ("Incorrect mode!")
 
         self.hz = hz
 
-        self.reference = np.zeros(shape=(len(t), 4))
+        self.reference = np.zeros(shape=(len(t), 6))
 
         self.reference[:, 0] = np.array([np.sin(2*np.pi*i*self.hz) for i in t]) # sin
         self.reference[:, 1] = np.array([np.cos(2*np.pi*i*self.hz) for i in t]) # cos
-        self.reference[:, 2] = np.array([np.sin(2*np.pi*i*self.hz*multiplier) for i in t]) #
-        self.reference[:, 3] = np.array([np.cos(2*np.pi*i*self.hz*multiplier) for i in t]) # 
+        self.reference[:, 2] = np.array([np.sin(2*np.pi*i*self.hz*2) for i in t]) #
+        self.reference[:, 3] = np.array([np.cos(2*np.pi*i*self.hz*2) for i in t]) #
+        self.reference[:, 4] = np.array([np.sin(2*np.pi*i*self.hz*0.5) for i in t]) #
+        self.reference[:, 5] = np.array([np.cos(2*np.pi*i*self.hz*0.5) for i in t]) #
+
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
-    def __init__(self, sampling_rate, channels_num, ref_signals, save_to_file):
+    def __init__(self, sampling_rate, filters, channels_num, ref_signals, save_to_file):
         self.signal_file = []
         self.packet_id = 0
         self.all_packets = 0
@@ -167,6 +160,13 @@ class CrossCorrelation(object):
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
         self.logging = []
+
+        if filters != None:
+            self.filter = ((int(self.rs[0]) - 2), ((int(self.rs[-1])*2) + 4))
+        else:
+            self.filter = filters
+
+        print("Bandpass filter set to: ", self.filter[0], "/", self.filter[1])
 
     def acquire_data(self, packet):
         self.signal_window[self.packet_id] = packet
@@ -219,8 +219,8 @@ class CrossCorrelation(object):
         # Butter bandpass filter 3-49hz
         for i in range(self.channels_num):
             signal = packet[:, i]
-            lowcut = 6/(self.sampling_rate*0.5)
-            highcut =  20/(self.sampling_rate*0.5)
+            lowcut = self.filter[0]/(self.sampling_rate*0.5)
+            highcut =  self.filter[1]/(self.sampling_rate*0.5)
             [b, a] = sig.butter(4, [lowcut, highcut], 'bandpass')
             packet[:, i] = sig.filtfilt(b, a, signal)
 
@@ -234,8 +234,8 @@ class CrossCorrelation(object):
             cca_ref = CCA(n_components=1)
             cca_all = CCA(n_components=1)
 
-            ref_ = self.rs[ref].reference[:, [0, 1]]
-            ref_2 = self.rs[ref].reference[:, [2, 3]]
+            ref_ = self.rs[ref].reference[:, [0, 1, 2, 3]]
+            ref_2 = self.rs[ref].reference[:, [0, 1, 4, 5]]
             ref_all = self.rs[ref].reference[:, [0, 1, 2, 3]]
 
             cca.fit(sample, ref_)
@@ -250,6 +250,7 @@ class CrossCorrelation(object):
             corr2 = np.corrcoef(u_2.T, v_2.T)[0, 1]
             corr_all = np.corrcoef(u_3.T, v_3.T)[0, 1]
             self.channels[ref] = corr, corr2, corr_all
+            #self.channels[ref] = corr_all
 
     def make_decission(self):
         '''Simple SSVEP Classifier'''
@@ -257,7 +258,7 @@ class CrossCorrelation(object):
         best_ = 0
         it_ = 0
         for ref in range(len(self.rs)):
-            thereshold_01 = self.channels[ref][0] >= 0.375
+            thereshold_01 = self.channels[ref][2] >= 0.375
             thereshold_02 = self.channels[ref][1] >= 0.22
             if thereshold_01 and thereshold_02:
                 if self.channels[ref][0] >= best_:
@@ -279,6 +280,6 @@ class CrossCorrelation(object):
         print("Canonical Correlation:")
         for i in range(len(self.rs)):
             print("Signal {hz}: {channel_value:.3}".format(hz=(str(self.rs[i].hz) + " hz"), channel_value=
-                  self.channels[i][0]))
+                  self.channels[i][2]))
         print("Stimuli detection: {0}".format([str(self.ssvep_display[i])
               for i in range(len(self.ssvep_display))]))
