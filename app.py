@@ -40,7 +40,7 @@ class CcaLive(object):
     test_session : bool
         Whether to keep real time processing of packets.
     gui : bool
-        GUI Mode on/off
+        GUI wyniki on/off
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='',
@@ -121,7 +121,7 @@ class CcaLive(object):
         # Board connection #
 
         self.correlation = CrossCorrelation(self.sampling_rate,
-                                            self.bandpass
+                                            self.bandpass,
                                             self.electrodes,
                                             self.ref,
                                             self.save_to_file)
@@ -131,7 +131,7 @@ class CcaLive(object):
 
 class SignalReference(object):
     """ Reference signal generator"""
-    def __init__(self, hz, t, mode):
+    def __init__(self, hz, t):
 
         self.hz = hz
 
@@ -161,12 +161,15 @@ class CrossCorrelation(object):
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
         self.logging = []
 
-        if filters != None:
-            self.filter = ((int(self.rs[0]) - 2), ((int(self.rs[-1])*2) + 4))
-        else:
-            self.filter = filters
+        # if filters == None:
+        #     if self.rs[-1].hz >= 49:
+        #         self.filter = ((int(self.rs[0]) - 2), (49))
+        #     else:
+        #         self.filter = ((int(self.rs[0].hz) - 2), ((int(self.rs[-1].hz)*2) + 4))
+        # else:
+        #     self.filter = filters
 
-        print("Bandpass filter set to: ", self.filter[0], "/", self.filter[1])
+        #print("Bandpass filter set to: ", self.filter[0], "/", self.filter[1])
 
     def acquire_data(self, packet):
         self.signal_window[self.packet_id] = packet
@@ -219,8 +222,8 @@ class CrossCorrelation(object):
         # Butter bandpass filter 3-49hz
         for i in range(self.channels_num):
             signal = packet[:, i]
-            lowcut = self.filter[0]/(self.sampling_rate*0.5)
-            highcut =  self.filter[1]/(self.sampling_rate*0.5)
+            lowcut = 10/(self.sampling_rate*0.5)
+            highcut =  16/(self.sampling_rate*0.5)
             [b, a] = sig.butter(4, [lowcut, highcut], 'bandpass')
             packet[:, i] = sig.filtfilt(b, a, signal)
 

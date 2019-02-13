@@ -37,8 +37,7 @@ port=BCI_PORT,
 sampling_rate=250,
 connect=True,
 electrodes=2,
-time_run=20,
-mode=1,
+time_run=30,
 save=True
 )
 #==============================================================================#
@@ -53,11 +52,7 @@ print("Number of acquired electrodes: {}".format(test.electrodes))
 print("Time of trial: {}".format(test.time_run))
 print("Sampling rate: {}".format(test.sampling_rate))
 print("Connected on serial port: {}".format(test.bci_port))
-print("Application mode: {}".format(test.mode))
-if test.mode == 1:
-    print ("Application mode: Harmonic reference signals")
-if test.mode == 2:
-    print ("Application mode: Subharmonic reference signals")
+print("Number of trial/subject: ", make_next())
 print("".join(["=" for x in range(32)]))
 
 #==============================================================================#
@@ -67,13 +62,12 @@ print("".join(["=" for x in range(32)]))
 # Stimulus for experiment. Max amount = 4.
 # ========================== #
 test.add_stimuli(12)
+test.add_stimuli(13)
 test.add_stimuli(14)
-test.add_stimuli(16)
 # ========================== #
 
-## SUBJECT NUMBER ##
 
-SUBJ = 5
+
 
 #==============================================================================#
 
@@ -102,7 +96,7 @@ if test.prcs.is_alive():
     test.prcs.terminate()
     print("Done!")
 
-create_subject_from_file(SUBJ)
+create_subject_from_file(make_next())
 
 
 
