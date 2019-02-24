@@ -5,7 +5,7 @@
 # ----------------------------------------------------------------------------#
 #                  OpenBCI Cyton CCA Application                              #
 # ----------------------------------------------------------------------------#
-
+#TODO SAVE RAW SIGNAL TO RAM
 
 import sys
 import os
@@ -24,6 +24,7 @@ import time
 #import matplotlib.pyplot as plt
 from time import gmtime, strftime
 import csv
+import serial
 
 
 class CcaLive(object):
@@ -44,7 +45,7 @@ class CcaLive(object):
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='',
-    path='', electrodes=2, time_run=10, save=False, bandpass=None):
+    port_arduino='', electrodes=2, time_run=10, save=False, bandpass=None):
 
         self.bci_port = port
         self.connect = connect
@@ -70,6 +71,10 @@ class CcaLive(object):
         self.streaming = mp.Event()
         self.terminate = mp.Event()
 
+        self.serial_arduino = serial.Serial(port_arduino, 9600)
+        time.sleep(2)
+        self.serial_arduino.write(b"H")
+
     def initialize(self):
         self.prcs = mp.Process(target=self.split,
                                args=(self.reference_signals,))
@@ -85,6 +90,7 @@ class CcaLive(object):
 
     def decission(self):
         status = input("Press Enter to start... ")
+        self.serial_arduino.write(b"L")
 
         if self.connect:
             self.initialize()
@@ -100,6 +106,7 @@ class CcaLive(object):
 
         if self.terminate.is_set():
             self.prcs.terminate()
+            self.serial_arduino.close()
             self.terminate.clear()
 
 
@@ -160,6 +167,8 @@ class CrossCorrelation(object):
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
         self.logging = []
+        self.raw_signal = 0 # TODO: Load entire signal to RAM and save afterwards.
+
 
         # if filters == None:
         #     if self.rs[-1].hz >= 49:
@@ -180,7 +189,7 @@ class CrossCorrelation(object):
             self.all_packets += 1
             filtered = self.filtering(self.signal_window)
             if self.save_to_file:
-                self.save_file(filtered)
+                self.save_file(np.squeeze(np.array(self.signal_window))) # Is that good?
                 self.save_file(self.channels)
 
             self.correlate(filtered)
@@ -191,7 +200,7 @@ class CrossCorrelation(object):
     def save_file(self, list_file):
 
         if list_file.shape == (self.sampling_rate, self.channels_num):
-            myFile = open('outputs/signal_filtered' + '.csv', 'a')
+            myFile = open('outputs/signal_raw' + '.csv', 'a')
 
             with myFile:
                 writer = csv.writer(myFile)

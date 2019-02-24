@@ -12,7 +12,7 @@ from  helpers import *
 # Port adress of OpenBCI Cyton board
 
 # BCI_PORT = '/dev/tty.usbserial-DM00CVLC'
-BCI_PORT = path_load.PortDiscover().port
+#BCI_PORT = path_load.PortDiscover().port
 
 #==============================================================================#
 # Run application
@@ -33,11 +33,12 @@ BCI_PORT = path_load.PortDiscover().port
 #==============================================================================#
 
 test = app.CcaLive(
-port=BCI_PORT,
+port='/dev/tty.usbserial-DM00CVLC',
+port_arduino="/dev/tty.usbmodem1431201",
 sampling_rate=250,
 connect=True,
 electrodes=2,
-time_run=30,
+time_run=100,
 save=True
 )
 #==============================================================================#
@@ -103,8 +104,7 @@ create_subject_from_file(make_next())
 import matplotlib.pyplot as plt
 import pandas as pd
 
-dane = pd.read_csv("outputs/SUBJ"+str(SUBJ)+"-results.csv", delimiter=',', engine='python')
-
+dane = pd.read_csv("outputs/SUBJ"+str(make_next())+"-results.csv", delimiter=',', engine='python')
 
 bodziec_1 = []
 bodziec_2 = []
