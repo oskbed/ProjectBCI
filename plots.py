@@ -1,6 +1,8 @@
 import matplotlib.pyplot as plt
 import pandas as pd
-dane = pd.read_csv("outputs/SUBJ5-results.csv", delimiter=',', engine='python')
+import os
+os.getcwd()
+dane = pd.read_csv(os.getcwd() + "/outputs/Example/SUBJ1-results.csv", delimiter=',', engine='python')
 
 
 bodziec_1 = []
@@ -24,5 +26,6 @@ plt.plot(bodziec_1, label="8hz")
 plt.plot(bodziec_2, label="12hz")
 plt.plot(bodziec_3, label="14hz")
 plt.legend()
-plt.title("FLT2/30 | SH |")
-plt.savefig('230SH.png')
+plt.plot()
+#plt.title("FLT2/30 | SH |")
+#plt.savefig('230SH.png')

@@ -1,11 +1,10 @@
 #!/usr/bin/env python -W ignore::DeprecationWarning
 # -*- coding: utf-8 -*-
 
-import app
+import app_test
 import path_load
 import os
 from  helpers import *
-import pandas as pd
 #==============================================================================#
 # Define global variables.
 #==============================================================================#
@@ -32,15 +31,17 @@ import pandas as pd
 #==============================================================================#
 # CONFIGURATION
 #==============================================================================#
+SUBJ = int(input("Trial number:"))
 
-test = app.CcaLive(
-port='/dev/tty.usbserial-DM00CVLC',
-port_arduino="/dev/tty.usbmodem1441401",
+test = app_test.CcaLive(
+port="",
 sampling_rate=250,
 connect=True,
 electrodes=2,
-time_run=105,
-save=True
+time_run=10,
+mode=1,
+save=False,
+subj=SUBJ
 )
 #==============================================================================#
 #==============================================================================#
@@ -54,7 +55,11 @@ print("Number of acquired electrodes: {}".format(test.electrodes))
 print("Time of trial: {}".format(test.time_run))
 print("Sampling rate: {}".format(test.sampling_rate))
 print("Connected on serial port: {}".format(test.bci_port))
-print("Number of trial/subject: ", make_next())
+print("Application mode: {}".format(test.mode))
+if test.mode == 1:
+    print ("Application mode: Harmonic reference signals")
+if test.mode == 2:
+    print ("Application mode: Subharmonic reference signals")
 print("".join(["=" for x in range(32)]))
 
 #==============================================================================#
@@ -67,8 +72,8 @@ test.add_stimuli(12)
 test.add_stimuli(13)
 test.add_stimuli(14)
 # ========================== #
+## SUBJECT NUMBER ##
 
-SUBJ = int(input())
 
 
 #==============================================================================#
@@ -90,7 +95,10 @@ test.decission()
 try:
     test.get_correlation()
 except AttributeError as e:
-    pass
+    if test.prcs.is_alive():
+        print("Terminating process...")
+        test.prcs.terminate()
+        print("Done!")
 
 # Make sure it's dead.
 if test.prcs.is_alive():
@@ -98,14 +106,14 @@ if test.prcs.is_alive():
     test.prcs.terminate()
     print("Done!")
 
-create_subject_from_file(SUBJ)
-
+#create_subject_from_file(SUBJ)
 
 
 import matplotlib.pyplot as plt
 import pandas as pd
 
 dane = pd.read_csv("outputs/SUBJ"+str(SUBJ)+"-results.csv", delimiter=',', engine='python')
+
 
 bodziec_1 = []
 bodziec_2 = []
