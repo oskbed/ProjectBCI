@@ -1,0 +1,39 @@
+from sklearn.cross_decomposition import CCA
+import numpy as np
+
+data_signal = pd.read_csv("/Downloads/dane.csv", delimiter=';', engine='python')
+
+data_stimulus = [1, 1, 2, 1, 3, 1, 2, 3, 1, 2, 1, 1, 3, 3, 2, 2, 3, 3, 3, 2, 2]
+
+data_sig = []
+
+for i in range(len(data_signal)):
+    data_sig.append([float(data_signal.iloc[i][0].replace(',','.')), float(data_signal.iloc[i][1].replace(',','.'))])
+
+sample = data_sig[1000:1250]
+
+hz = 14
+
+__fs = 1./250
+__t = np.arange(0.0, 1.0, __fs)
+
+reference = np.zeros(shape=(len(__t), 6))
+
+reference[:, 0] = np.array([np.sin(2*np.pi*i*hz) for i in  __t]) # sin
+reference[:, 1] = np.array([np.cos(2*np.pi*i*hz) for i in __t]) # cos
+reference[:, 2] = np.array([np.sin(2*np.pi*i*hz*2) for i in __t]) #
+reference[:, 3] = np.array([np.cos(2*np.pi*i*hz*2) for i in __t]) #
+
+cca = CCA(n_components=1)
+cca_ref = CCA(n_components=1)
+cca_all = CCA(n_components=1)
+
+ref_all = reference[:, [0, 1, 2, 3]]
+
+cca_all.fit(sample, ref_all)
+
+u, v = cca_all.transform(sample, ref_all)
+
+corr_all = np.corrcoef(u.T, v.T)[0, 1]
+
+print(corr_all)
