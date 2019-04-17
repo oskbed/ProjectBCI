@@ -1,10 +1,22 @@
 import numpy as np
 
-lowcut = 49/(250*0.5)
-highcut =  51/(250*0.5)
+# lowcut = 49/(250*0.5)
+# highcut =  51/(250*0.5)
 
-b2, a2 = sig.butter(4, [lowcut, highcut], 'bandstop')
+# b2, a2 = sig.butter(4, [lowcut, highcut], 'bandstop')
 
+
+# data_filtered = []
+# op = FltRealTime()
+
+# for i in range(len(data_signal)):
+#     a = (data_signal.iloc[i, 0])
+#     b = (data_signal.iloc[i, 1])
+#     a_f = op.filterIIR(a, 0)
+#     b_f = op.filterIIR(b, 0)
+#     data_filtered.append([a_f, b_f])
+
+# my_data = np.array(data_filtered)
 
 class FltRealTime(object):
     def __init__(self, flt_type='4A'):
