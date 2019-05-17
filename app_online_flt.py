@@ -10,7 +10,7 @@
 import sys
 import os
 
-OpenBCI_PATH = '/Users/oskar.bedychaj/University/OpenBCI_Python'
+OpenBCI_PATH = os.getcwd() + '/OpenBCI_Python'
 
 # // Load OpenBCI_Python to $PATH variable. //
 sys.path.insert(0, OpenBCI_PATH)
@@ -45,7 +45,7 @@ class CcaLive(object):
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='',
-    port_arduino='', electrodes=2, time_run=10, save=False, bandpass=None):
+    port_arduino=None, electrodes=2, time_run=10, save=False, bandpass=None):
 
         self.bci_port = port
         self.connect = connect
@@ -53,6 +53,7 @@ class CcaLive(object):
         self.electrodes = electrodes
         self.time_run = time_run
         self.save_to_file = save
+        self.port_arduino = port_arduino
 
         self.reference_signals = []
 
@@ -71,9 +72,10 @@ class CcaLive(object):
         self.streaming = mp.Event()
         self.terminate = mp.Event()
 
-        self.serial_arduino = serial.Serial(port_arduino, 9600)
-        time.sleep(2)
-        self.serial_arduino.write(b"H")
+        # if self.port_arduino != None:
+        #     self.serial_arduino = serial.Serial(self.port_arduino, 9600)
+        #     time.sleep(2)
+        #     self.serial_arduino.write(b"H")
 
     def initialize(self):
         self.prcs = mp.Process(target=self.split,
@@ -90,10 +92,16 @@ class CcaLive(object):
 
     def decission(self):
         status = input("Press Enter to start... ")
-        self.serial_arduino.write(b"L")
+        # if self.port_arduino:
+        #     self.serial_arduino.write(b"L")
 
         if self.connect:
             self.initialize()
+
+        if self.port_arduino:
+            time.sleep(5)
+            #self.serial_arduino.write(b"L")
+
 
         # Compensate for packet correlation
         time.sleep(self.time_run+1)
@@ -106,7 +114,7 @@ class CcaLive(object):
 
         if self.terminate.is_set():
             self.prcs.terminate()
-            self.serial_arduino.close()
+            serial.Serial(self.port_arduino, 9600).close()
             self.terminate.clear()
 
 
@@ -121,6 +129,7 @@ class CcaLive(object):
 
             # Set termination
             if self.terminate.is_set():
+                serial.Serial(self.port_arduino, 9600).close()
                 self.streaming.clear()
                 self.board.stop()
 
@@ -131,7 +140,8 @@ class CcaLive(object):
                                             self.bandpass,
                                             self.electrodes,
                                             self.ref,
-                                            self.save_to_file)
+                                            self.save_to_file,
+                                            self.port_arduino)
 
         self.board.start_streaming(handle_sample)
         self.board.disconnect()
@@ -203,6 +213,10 @@ class OnlineFilter(object):
 
         self.prev_x[nrk, 0] = data
 
+        filtered = self.filter_data(b2, a2, b, a, nrk)
+        return filtered
+
+
     def filter_data(self, b2, a2, b, a, nrk):
         value = 0.0
         for j in range(5):
@@ -222,10 +236,11 @@ class OnlineFilter(object):
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
-    def __init__(self, sampling_rate, filters, channels_num, ref_signals, save_to_file):
+    def __init__(self, sampling_rate, filters, channels_num, ref_signals, save_to_file, port_arduino):
         self.signal_file = []
         self.packet_id = 0
         self.all_packets = 0
+        self.port_arduino = port_arduino
         self.sampling_rate = sampling_rate
         self.rs = ref_signals
         self.sampling_rate = sampling_rate
@@ -237,6 +252,10 @@ class CrossCorrelation(object):
         self.logging = []
         self.raw_signal = 0 # TODO: Load entire signal to RAM and save afterwards.
 
+        self.flt = OnlineFilter()
+        self.serial_arduino = serial.Serial(self.port_arduino, 9600)
+        time.sleep(2)
+        self.serial_arduino.write(b"H")
 
         # if filters == None:
         #     if self.rs[-1].hz >= 49:
@@ -249,18 +268,19 @@ class CrossCorrelation(object):
         #print("Bandpass filter set to: ", self.filter[0], "/", self.filter[1])
 
     def acquire_data(self, packet):
-        self.signal_window[self.packet_id] = packet
+        self.signal_window[self.packet_id] = self.filtering(packet)
         self.signal_file.append(packet)
         self.packet_id += 1
 
         if self.packet_id % self.sampling_rate == 0:
+            self.serial_arduino.write(b"H")
             self.all_packets += 1
-            filtered = self.filtering(self.signal_window)
+            #filtered = self.filtering(self.signal_window)
             if self.save_to_file:
-                self.save_file(np.squeeze(np.array(self.signal_window))) # Is that good?
+                self.save_file(np.squeeze(np.array(packet)))  # Is that good?
                 self.save_file(self.channels)
 
-            self.correlate(filtered)
+            self.correlate(self.signal_window)
             self.make_decission()
             self.print_results()
             self.packet_id = 0
@@ -286,25 +306,11 @@ class CrossCorrelation(object):
 
     def filtering(self, packet):
         """ Push single sample into the list """
-        packet = np.squeeze(np.array(packet))
-
-        # Butter bandstop filter 49-51hz
         for i in range(self.channels_num):
-            signal = packet[:, i]
-            lowcut = 49/(self.sampling_rate*0.5)
-            highcut = 51/(self.sampling_rate*0.5)
-            [b, a] = sig.butter(4, [lowcut, highcut], 'bandstop')
-            packet[:, i] = sig.filtfilt(b, a, signal)
-
-        # Butter bandpass filter 3-49hz
-        for i in range(self.channels_num):
-            signal = packet[:, i]
-            lowcut = 10/(self.sampling_rate*0.5)
-            highcut =  16/(self.sampling_rate*0.5)
-            [b, a] = sig.butter(4, [lowcut, highcut], 'bandpass')
-            packet[:, i] = sig.filtfilt(b, a, signal)
+            packet[i] = self.flt.filterIIR(packet[i], i)
 
         return packet
+
 
     def correlate(self, signal):
         for ref in range(len(self.rs)):

@@ -1,7 +1,7 @@
 #!/usr/bin/env python -W ignore::DeprecationWarning
 # -*- coding: utf-8 -*-
 
-import app
+import app_online_flt as app
 import path_load
 import os
 from  helpers import *
@@ -35,7 +35,7 @@ import pandas as pd
 
 test = app.CcaLive(
 port='/dev/tty.usbserial-DM00CVLC',
-port_arduino="/dev/tty.usbmodem1441401",
+port_arduino='/dev/tty.usbmodem1451201',
 sampling_rate=250,
 connect=True,
 electrodes=2,
@@ -68,7 +68,7 @@ test.add_stimuli(13)
 test.add_stimuli(14)
 # ========================== #
 
-SUBJ = int(input())
+SUBJ = int(input("Subject: "))
 
 
 #==============================================================================#

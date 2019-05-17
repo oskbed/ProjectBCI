@@ -1,7 +1,7 @@
 #!/usr/bin/env python -W ignore::DeprecationWarning
 # -*- coding: utf-8 -*-
 
-import app_test
+import app_test_w_flt as app_test
 import path_load
 import os
 from  helpers import *

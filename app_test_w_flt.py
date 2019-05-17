@@ -5,7 +5,7 @@
 # ----------------------------------------------------------------------------#
 #                  OpenBCI Cyton CCA Application                              #
 # ----------------------------------------------------------------------------#
-#TODO SAVE RAW SIGNAL TO RAM
+
 
 import sys
 import os
@@ -18,13 +18,12 @@ sys.path.insert(0, OpenBCI_PATH)
 from sklearn.cross_decomposition import CCA
 import numpy as np
 import multiprocessing as mp
-import openbci.cyton as bci
+import test as bci
 import scipy.signal as sig
 import time
 #import matplotlib.pyplot as plt
 from time import gmtime, strftime
 import csv
-import serial
 
 
 class CcaLive(object):
@@ -41,28 +40,35 @@ class CcaLive(object):
     test_session : bool
         Whether to keep real time processing of packets.
     gui : bool
-        GUI wyniki on/off
+        GUI Mode on/off
 
     """
-    def __init__(self, sampling_rate=250, connect=True, port='',
-    port_arduino='', electrodes=2, time_run=10, save=False, bandpass=None):
+    def __init__(self, sampling_rate=256, connect=True, port='', channels=[],
+    path='', test_session=True, electrodes=2, time_run=10, mode=1, save=False, subj=0):
+
+        self.CHANNELS = channels
+        self.PATH = path
 
         self.bci_port = port
         self.connect = connect
 
         self.electrodes = electrodes
         self.time_run = time_run
+        self.mode = mode
         self.save_to_file = save
+        self.subj = 0
 
         self.reference_signals = []
 
         self.__fs = 1./sampling_rate
         self.__t = np.arange(0.0, 1.0, self.__fs)
 
-        self.board = bci.OpenBCICyton(port=self.bci_port)
-        self.board.print_register_settings()
+        self.test_session = test_session
+
+        self.board = bci.OpenBCISimulator(channels=[0,1], subj=subj)
+        #self.board.print_register_settings()
+        #self.sampling_rate = int(self.board.getSampleRate())
         self.sampling_rate = sampling_rate
-        self.bandpass = bandpass
 
         print ("================================")
         print ("  OpenBCI Cyton CCA Application ")
@@ -70,10 +76,6 @@ class CcaLive(object):
 
         self.streaming = mp.Event()
         self.terminate = mp.Event()
-
-        self.serial_arduino = serial.Serial(port_arduino, 9600)
-        time.sleep(2)
-        self.serial_arduino.write(b"H")
 
     def initialize(self):
         self.prcs = mp.Process(target=self.split,
@@ -86,11 +88,10 @@ class CcaLive(object):
 
         self.hz = hz
         self.reference_signals.append(SignalReference(self.hz, self.__t))
-        print ("Stimuli {} hz added!".format(self.hz))
+        print ("Stimuli of {} hz added!".format(self.hz))
 
     def decission(self):
         status = input("Press Enter to start... ")
-        self.serial_arduino.write(b"L")
 
         if self.connect:
             self.initialize()
@@ -106,7 +107,6 @@ class CcaLive(object):
 
         if self.terminate.is_set():
             self.prcs.terminate()
-            self.serial_arduino.close()
             self.terminate.clear()
 
 
@@ -128,13 +128,13 @@ class CcaLive(object):
         # Board connection #
 
         self.correlation = CrossCorrelation(self.sampling_rate,
-                                            self.bandpass,
                                             self.electrodes,
                                             self.ref,
-                                            self.save_to_file)
+                                            self.save_to_file,
+                                            self.subj)
 
         self.board.start_streaming(handle_sample)
-        self.board.disconnect()
+        #self.board.disconnect()
 
 class SignalReference(object):
     """ Reference signal generator"""
@@ -142,7 +142,7 @@ class SignalReference(object):
 
         self.hz = hz
 
-        self.reference = np.zeros(shape=(len(t), 6))
+        self.reference = np.zeros(shape=(len(t), 8))
 
         self.reference[:, 0] = np.array([np.sin(2*np.pi*i*self.hz) for i in t]) # sin
         self.reference[:, 1] = np.array([np.cos(2*np.pi*i*self.hz) for i in t]) # cos
@@ -162,21 +162,21 @@ class OnlineFilter(object):
     def filterIIR(self, data, nrk):
 
         b = np.array([
-                0.1750876436721012,
-                0,
-                -0.3501752873442023,
-                0,
-                0.1750876436721012
-            ])
+            0.1750876436721012,
+            0,
+            -0.3501752873442023,
+            0,
+            0.1750876436721012
+        ])
         a = np.array([
-                1,
-                -2.299055356038497,
-                1.967497759984450,
-                -0.8748055564494800,
-                0.2196539839136946
-            ])
+            1,
+            -2.299055356038497,
+            1.967497759984450,
+            -0.8748055564494800,
+            0.2196539839136946
+        ])
 
-        # 50 hz 
+        # 50 hz
         b2 = np.array([
             0.96508099,
             -1.19328255,
@@ -202,6 +202,10 @@ class OnlineFilter(object):
             j -= 1
 
         self.prev_x[nrk, 0] = data
+        
+        filtered = self.filter_data(b2, a2, b, a, nrk)
+        return filtered
+
 
     def filter_data(self, b2, a2, b, a, nrk):
         value = 0.0
@@ -222,7 +226,7 @@ class OnlineFilter(object):
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
-    def __init__(self, sampling_rate, filters, channels_num, ref_signals, save_to_file):
+    def __init__(self, sampling_rate, channels_num, ref_signals, save_to_file, subj):
         self.signal_file = []
         self.packet_id = 0
         self.all_packets = 0
@@ -235,40 +239,44 @@ class CrossCorrelation(object):
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
         self.logging = []
-        self.raw_signal = 0 # TODO: Load entire signal to RAM and save afterwards.
+        self.channels_list = []
+        self.flt = OnlineFilter()
 
 
-        # if filters == None:
-        #     if self.rs[-1].hz >= 49:
-        #         self.filter = ((int(self.rs[0]) - 2), (49))
-        #     else:
-        #         self.filter = ((int(self.rs[0].hz) - 2), ((int(self.rs[-1].hz)*2) + 4))
-        # else:
-        #     self.filter = filters
 
-        #print("Bandpass filter set to: ", self.filter[0], "/", self.filter[1])
+        self.text_file = open("/Users/oskar.bedychaj/University/stimuli/badanie" + str(subj) + ".txt", 'r')
+        self.data_stimulus = self.text_file.read().split(',')
+        del self.data_stimulus[-1]
+        self.stim_array = []
+
+        for i in self.data_stimulus:
+            for j in range(5):
+                self.stim_array.append(i)
+
+        self.stim_array.append(self.stim_array[-1])
+        self.hits = 0
+
 
     def acquire_data(self, packet):
-        self.signal_window[self.packet_id] = packet
-        self.signal_file.append(packet)
+        self.signal_window[self.packet_id] = self.filtering(packet)
         self.packet_id += 1
 
         if self.packet_id % self.sampling_rate == 0:
             self.all_packets += 1
-            filtered = self.filtering(self.signal_window)
+            #filtered = self.filtering(self.signal_window)
             if self.save_to_file:
-                self.save_file(np.squeeze(np.array(self.signal_window))) # Is that good?
+                self.save_file(np.squeeze(np.array(self.signal_window)))
                 self.save_file(self.channels)
 
-            self.correlate(filtered)
+            self.correlate(self.signal_window)
             self.make_decission()
-            self.print_results()
+            self.print_results(self.stim_array[self.all_packets])
             self.packet_id = 0
 
     def save_file(self, list_file):
 
         if list_file.shape == (self.sampling_rate, self.channels_num):
-            myFile = open('outputs/signal_raw' + '.csv', 'a')
+            myFile = open('outputs/signal_filtered' + '.csv', 'a')
 
             with myFile:
                 writer = csv.writer(myFile)
@@ -286,50 +294,33 @@ class CrossCorrelation(object):
 
     def filtering(self, packet):
         """ Push single sample into the list """
-        packet = np.squeeze(np.array(packet))
-
-        # Butter bandstop filter 49-51hz
+        #packet = np.squeeze(np.array(packeqt))
+        #packet = np.array(packet)
+       # print("========")
+        #print ("1", packet)
         for i in range(self.channels_num):
-            signal = packet[:, i]
-            lowcut = 49/(self.sampling_rate*0.5)
-            highcut = 51/(self.sampling_rate*0.5)
-            [b, a] = sig.butter(4, [lowcut, highcut], 'bandstop')
-            packet[:, i] = sig.filtfilt(b, a, signal)
+            packet[i] = self.flt.filterIIR(packet[i], i)
 
-        # Butter bandpass filter 3-49hz
-        for i in range(self.channels_num):
-            signal = packet[:, i]
-            lowcut = 10/(self.sampling_rate*0.5)
-            highcut =  16/(self.sampling_rate*0.5)
-            [b, a] = sig.butter(4, [lowcut, highcut], 'bandpass')
-            packet[:, i] = sig.filtfilt(b, a, signal)
-
+        #time.sleep(1)
+        #print ("2",packet)
         return packet
+        
 
     def correlate(self, signal):
         for ref in range(len(self.rs)):
             sample = signal
 
             cca = CCA(n_components=1)
-            cca_ref = CCA(n_components=1)
-            cca_all = CCA(n_components=1)
 
-            ref_ = self.rs[ref].reference[:, [0, 1, 2, 3]]
-            ref_2 = self.rs[ref].reference[:, [0, 1, 4, 5]]
             ref_all = self.rs[ref].reference[:, [0, 1, 2, 3]]
+           
+            cca.fit(sample, ref_all)
 
-            cca.fit(sample, ref_)
-            cca_ref.fit(sample, ref_2)
-            cca_all.fit(sample, ref_all)
+            u, v = cca.transform(sample, ref_all)
 
-            u, v = cca.transform(sample, ref_)
-            u_2, v_2 = cca_ref.transform(sample, ref_2)
-            u_3, v_3 = cca_all.transform(sample, ref_all)
-
-            corr = np.corrcoef(u.T, v.T)[0, 1]
-            corr2 = np.corrcoef(u_2.T, v_2.T)[0, 1]
-            corr_all = np.corrcoef(u_3.T, v_3.T)[0, 1]
-            self.channels[ref] = corr, corr2, corr_all
+            corr = abs(np.corrcoef(u.T, v.T)[0, 1])
+            self.channels_list.append(corr)
+            self.channels[ref] = corr
             #self.channels[ref] = corr_all
 
     def make_decission(self):
@@ -352,7 +343,22 @@ class CrossCorrelation(object):
 
         self.logging.append(self.ssvep_display.copy())
 
-    def print_results(self):
+        # max = 0
+        # index = 0
+        # for i in range(len(self.channels)):
+        #     if (self.channels[i][2]) > max:
+        #         max = self.channels[i][2]
+        #         index = i
+        print(self.channels_list.index(max(self.channels_list)))
+        #print (index)
+        #print (max)
+        #print (self.stim_array[self.all_packets])
+
+        # if (index + 1) == int(self.stim_array[self.all_packets]):
+        #     print("Zgodny")
+        #     self.hits += 1
+
+    def print_results(self,stimul):
         ''' Prints results in terminal '''
         print("================================")
         print("Packet ID : %s " % self.all_packets)
@@ -363,3 +369,6 @@ class CrossCorrelation(object):
                   self.channels[i][2]))
         print("Stimuli detection: {0}".format([str(self.ssvep_display[i])
               for i in range(len(self.ssvep_display))]))
+        print("Displayed stimuli: ", int(stimul))
+        print("========")
+        print("Global hits: ", self.hits)
