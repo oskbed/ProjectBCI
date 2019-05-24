@@ -7,10 +7,14 @@
 # ----------------------------------------------------------------------------#
 #TODO SAVE RAW SIGNAL TO RAM
 
+from time import gmtime, strftime
+import csv
+import serial
+from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM
 import sys
 import os
 
-OpenBCI_PATH = os.getcwd() + '/OpenBCI_Python'
+OpenBCI_PATH = '/Users/oskar.bedychaj/University/OpenBCI_Python'
 
 # // Load OpenBCI_Python to $PATH variable. //
 sys.path.insert(0, OpenBCI_PATH)
@@ -22,10 +26,8 @@ import openbci.cyton as bci
 import scipy.signal as sig
 import time
 #import matplotlib.pyplot as plt
-from time import gmtime, strftime
-import csv
-import serial
-
+S_PORT_NUMBER = 5000
+S_SIZE = 1024
 
 class CcaLive(object):
     """CCA Application for SSVEP detection.
@@ -72,12 +74,18 @@ class CcaLive(object):
         self.streaming = mp.Event()
         self.terminate = mp.Event()
 
+        self.socket = socket(AF_INET, SOCK_DGRAM)
+
         # if self.port_arduino != None:
         #     self.serial_arduino = serial.Serial(self.port_arduino, 9600)
         #     time.sleep(2)
         #     self.serial_arduino.write(b"H")
 
     def initialize(self):
+        self.socket.bind((gethostbyname('0.0.0.0'), S_PORT_NUMBER))
+
+        print("Test server listening on port {0}\n".format(S_PORT_NUMBER))
+
         self.prcs = mp.Process(target=self.split,
                                args=(self.reference_signals,))
         self.prcs.daemon = True
@@ -114,7 +122,7 @@ class CcaLive(object):
 
         if self.terminate.is_set():
             self.prcs.terminate()
-            serial.Serial(self.port_arduino, 9600).close()
+            #serial.Serial(self.port_arduino, 9600).close()
             self.terminate.clear()
 
 
@@ -129,7 +137,7 @@ class CcaLive(object):
 
             # Set termination
             if self.terminate.is_set():
-                serial.Serial(self.port_arduino, 9600).close()
+                #serial.Serial(self.port_arduino, 9600).close()
                 self.streaming.clear()
                 self.board.stop()
 
@@ -141,7 +149,8 @@ class CcaLive(object):
                                             self.electrodes,
                                             self.ref,
                                             self.save_to_file,
-                                            self.port_arduino)
+                                            self.port_arduino,
+                                            self.socket)
 
         self.board.start_streaming(handle_sample)
         self.board.disconnect()
@@ -236,7 +245,7 @@ class OnlineFilter(object):
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
-    def __init__(self, sampling_rate, filters, channels_num, ref_signals, save_to_file, port_arduino):
+    def __init__(self, sampling_rate, filters, channels_num, ref_signals, save_to_file, port_arduino, socket):
         self.signal_file = []
         self.packet_id = 0
         self.all_packets = 0
@@ -250,12 +259,16 @@ class CrossCorrelation(object):
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
         self.logging = []
+        self.socket = socket
+        self.hits = 0
+        self.current_stimuli = None
+        self.list_stimuli = []
         self.raw_signal = 0 # TODO: Load entire signal to RAM and save afterwards.
 
         self.flt = OnlineFilter()
-        self.serial_arduino = serial.Serial(self.port_arduino, 9600)
+        #self.serial_arduino = serial.Serial(self.port_arduino, 9600)
         time.sleep(2)
-        self.serial_arduino.write(b"H")
+        #self.serial_arduino.write(b"H")
 
         # if filters == None:
         #     if self.rs[-1].hz >= 49:
@@ -271,14 +284,18 @@ class CrossCorrelation(object):
         self.signal_window[self.packet_id] = self.filtering(packet)
         self.signal_file.append(packet)
         self.packet_id += 1
+        (data, addr) = self.socket.recvfrom(SIZE)
+        self.current_stimuli = (int.from_bytes(data, "big"))
+        self.list_stimuli.append(self.current_stimuli)
 
         if self.packet_id % self.sampling_rate == 0:
-            self.serial_arduino.write(b"H")
+            #self.serial_arduino.write(b"H")
             self.all_packets += 1
             #filtered = self.filtering(self.signal_window)
             if self.save_to_file:
                 self.save_file(np.squeeze(np.array(packet)))  # Is that good?
                 self.save_file(self.channels)
+                self.save_file(self.list_stimuli)
 
             self.correlate(self.signal_window)
             self.make_decission()
@@ -297,6 +314,12 @@ class CrossCorrelation(object):
 
         elif list_file.shape == (len(self.rs), 3):
             myFile = open('outputs/results' + '.csv', 'a')
+
+            with myFile:
+                writer = csv.writer(myFile)
+                writer.writerows(list_file)
+        elif list_file == list:
+            myFile = open('outputs/stims_list' + '.csv', 'a')
 
             with myFile:
                 writer = csv.writer(myFile)
@@ -332,9 +355,9 @@ class CrossCorrelation(object):
             u_2, v_2 = cca_ref.transform(sample, ref_2)
             u_3, v_3 = cca_all.transform(sample, ref_all)
 
-            corr = np.corrcoef(u.T, v.T)[0, 1]
-            corr2 = np.corrcoef(u_2.T, v_2.T)[0, 1]
-            corr_all = np.corrcoef(u_3.T, v_3.T)[0, 1]
+            corr = abs(np.corrcoef(u.T, v.T)[0, 1])
+            corr2 = abs(np.corrcoef(u_2.T, v_2.T)[0, 1])
+            corr_all = abs(np.corrcoef(u_3.T, v_3.T)[0, 1])
             self.channels[ref] = corr, corr2, corr_all
             #self.channels[ref] = corr_all
 
@@ -358,6 +381,20 @@ class CrossCorrelation(object):
 
         self.logging.append(self.ssvep_display.copy())
 
+        max = 0
+        index = 0
+        for i in range(len(self.channels)):
+            if (self.channels[i][2]) > max:
+                max = self.channels[i][2]
+                index = i
+
+        if (index + 1) == int(self.current_stimuli):
+            print("Zgodny")
+            self.hits += 1
+
+
+
+
     def print_results(self):
         ''' Prints results in terminal '''
         print("================================")
@@ -369,3 +406,6 @@ class CrossCorrelation(object):
                   self.channels[i][2]))
         print("Stimuli detection: {0}".format([str(self.ssvep_display[i])
               for i in range(len(self.ssvep_display))]))
+        print("Displayed stimuli: ", int(stimul))
+        print("========")
+        print("Global hits: ", self.hits)

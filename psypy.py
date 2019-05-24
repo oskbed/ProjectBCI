@@ -3,12 +3,24 @@ from numpy import sin, pi
 import random
 import matplotlib.pyplot as plt
 
+import sys
+from socket import socket, AF_INET, SOCK_DGRAM
+import time
+
+SERVER_IP = '127.0.0.1'
+PORT_NUMBER = 5000
+SIZE = 1024
+print("Test client sending packets to IP {0}, via port {1}\n".format(
+    SERVER_IP, PORT_NUMBER))
+
+mySocket = socket(AF_INET, SOCK_DGRAM)
+mySocket.connect((SERVER_IP, PORT_NUMBER))
 
 screen_resolution = [1366, 768] # Auto adjustable
 stimuli_freq = [10, 12, 14] # From lowest to highest, max 4
 
 window = visual.Window(screen_resolution, monitor="testMonitor",
-                       units='pix', fullscr=True, color=[-1, -1, -1])
+                       units='pix', fullscr=False, color=[-1, -1, -1])
 
 
 stimuli_order = random.choices(stimuli_freq, k=21)
@@ -73,10 +85,12 @@ while True:
   color_3 = sin(stimuli_freq[2]*pi*2*current_frame/60)
 
   current_stim = stimuli_order[n]
-
+  mySocket.send(bytes([current_stim]))
+  
   if not timer.getTime() > 0:
     timer.add(5)
-    n += 1 
+    n += 1
+
 
   sign_stimuli.pos = stimuli_pos[current_stim]
   sign_stimuli.draw()

@@ -35,7 +35,7 @@ import pandas as pd
 
 test = app.CcaLive(
 port='/dev/tty.usbserial-DM00CVLC',
-port_arduino='/dev/tty.usbmodem1451201',
+port_arduino='',
 sampling_rate=250,
 connect=True,
 electrodes=2,
