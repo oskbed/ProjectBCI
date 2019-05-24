@@ -12,5 +12,8 @@ mySocket = socket(AF_INET, SOCK_DGRAM)
 mySocket.connect((SERVER_IP, PORT_NUMBER))
 
 while True:
-        mySocket.send(b'h')
-        time.sleep(1)
+        mySocket.send(bytes([12]))
+        time.sleep(4)
+        mySocket.send(bytes([10]))
+        time.sleep(2)
+        mySocket.send(bytes([66]))

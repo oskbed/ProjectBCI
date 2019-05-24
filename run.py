@@ -39,7 +39,7 @@ port_arduino='',
 sampling_rate=250,
 connect=True,
 electrodes=2,
-time_run=105,
+time_run=15,
 save=True
 )
 #==============================================================================#

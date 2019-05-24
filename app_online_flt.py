@@ -13,7 +13,7 @@ import serial
 from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM
 import sys
 import os
-
+import random
 OpenBCI_PATH = '/Users/oskar.bedychaj/University/OpenBCI_Python'
 
 # // Load OpenBCI_Python to $PATH variable. //
@@ -74,7 +74,16 @@ class CcaLive(object):
         self.streaming = mp.Event()
         self.terminate = mp.Event()
 
-        self.socket = socket(AF_INET, SOCK_DGRAM)
+        self.SERVER_IP = '127.0.0.1'
+
+
+        self.PORT_NUMBER = 5000
+        self.SIZE = 1024
+        print("Test client sending packets to IP {0}, via port {1}\n".format(self.SERVER_IP, self.PORT_NUMBER))
+
+        self.mySocket = socket(AF_INET, SOCK_DGRAM)
+        self.mySocket.connect((self.SERVER_IP, self.PORT_NUMBER))
+
 
         # if self.port_arduino != None:
         #     self.serial_arduino = serial.Serial(self.port_arduino, 9600)
@@ -82,9 +91,9 @@ class CcaLive(object):
         #     self.serial_arduino.write(b"H")
 
     def initialize(self):
-        self.socket.bind((gethostbyname('0.0.0.0'), S_PORT_NUMBER))
+        #self.socket.bind((gethostbyname('0.0.0.0'), S_PORT_NUMBER))
 
-        print("Test server listening on port {0}\n".format(S_PORT_NUMBER))
+        #print("Test server listening on port {0}\n".format(S_PORT_NUMBER))
 
         self.prcs = mp.Process(target=self.split,
                                args=(self.reference_signals,))
@@ -150,7 +159,7 @@ class CcaLive(object):
                                             self.ref,
                                             self.save_to_file,
                                             self.port_arduino,
-                                            self.socket)
+                                            self.mySocket)
 
         self.board.start_streaming(handle_sample)
         self.board.disconnect()
@@ -259,11 +268,16 @@ class CrossCorrelation(object):
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
         self.logging = []
-        self.socket = socket
+        #self.socket = socket
         self.hits = 0
         self.current_stimuli = None
         self.list_stimuli = []
+        self.socket = socket
         self.raw_signal = 0 # TODO: Load entire signal to RAM and save afterwards.
+        c_stim = 0
+
+        self.stimuli_order = random.choices([10,12,14], k=21)
+        
 
         self.flt = OnlineFilter()
         #self.serial_arduino = serial.Serial(self.port_arduino, 9600)
@@ -284,23 +298,27 @@ class CrossCorrelation(object):
         self.signal_window[self.packet_id] = self.filtering(packet)
         self.signal_file.append(packet)
         self.packet_id += 1
-        (data, addr) = self.socket.recvfrom(SIZE)
-        self.current_stimuli = (int.from_bytes(data, "big"))
-        self.list_stimuli.append(self.current_stimuli)
+        #(data, addr) = self.socket.recvfrom(S_SIZE)
+        #self.current_stimuli = (int.from_bytes(data, "big"))
+        #self.list_stimuli.append(self.current_stimuli)
 
         if self.packet_id % self.sampling_rate == 0:
             #self.serial_arduino.write(b"H")
             self.all_packets += 1
+            if self.all_packets % 7 == 0:
+                mySocket.send(bytes([self.stimuli_order[c_stim]]))
+                c_stim=+ 1
             #filtered = self.filtering(self.signal_window)
             if self.save_to_file:
                 self.save_file(np.squeeze(np.array(packet)))  # Is that good?
                 self.save_file(self.channels)
-                self.save_file(self.list_stimuli)
+                #self.save_file(self.list_stimuli)
 
             self.correlate(self.signal_window)
             self.make_decission()
             self.print_results()
             self.packet_id = 0
+
 
     def save_file(self, list_file):
 
@@ -314,12 +332,6 @@ class CrossCorrelation(object):
 
         elif list_file.shape == (len(self.rs), 3):
             myFile = open('outputs/results' + '.csv', 'a')
-
-            with myFile:
-                writer = csv.writer(myFile)
-                writer.writerows(list_file)
-        elif list_file == list:
-            myFile = open('outputs/stims_list' + '.csv', 'a')
 
             with myFile:
                 writer = csv.writer(myFile)
@@ -381,16 +393,16 @@ class CrossCorrelation(object):
 
         self.logging.append(self.ssvep_display.copy())
 
-        max = 0
-        index = 0
-        for i in range(len(self.channels)):
-            if (self.channels[i][2]) > max:
-                max = self.channels[i][2]
-                index = i
+        # max = 0
+        # index = 0
+        # for i in range(len(self.channels)):
+        #     if (self.channels[i][2]) > max:
+        #         max = self.channels[i][2]
+        #         index = i
 
-        if (index + 1) == int(self.current_stimuli):
-            print("Zgodny")
-            self.hits += 1
+        # if (index + 1) == int(self.current_stimuli):
+        #     print("Zgodny")
+        #     self.hits += 1
 
 
 
@@ -406,6 +418,6 @@ class CrossCorrelation(object):
                   self.channels[i][2]))
         print("Stimuli detection: {0}".format([str(self.ssvep_display[i])
               for i in range(len(self.ssvep_display))]))
-        print("Displayed stimuli: ", int(stimul))
+        #print("Displayed stimuli: ", int(stimul))
         print("========")
-        print("Global hits: ", self.hits)
+       # print("Global hits: ", self.hits)

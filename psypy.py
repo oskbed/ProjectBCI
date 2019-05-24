@@ -7,17 +7,21 @@ import sys
 from socket import socket, AF_INET, SOCK_DGRAM
 import time
 
-SERVER_IP = '127.0.0.1'
+from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM
+import sys
+
 PORT_NUMBER = 5000
 SIZE = 1024
-print("Test client sending packets to IP {0}, via port {1}\n".format(
-    SERVER_IP, PORT_NUMBER))
+
+hostName = gethostbyname('0.0.0.0')
 
 mySocket = socket(AF_INET, SOCK_DGRAM)
-mySocket.connect((SERVER_IP, PORT_NUMBER))
+mySocket.bind((hostName, PORT_NUMBER))
+
+print("Test server listening on port {0}\n".format(PORT_NUMBER))
 
 screen_resolution = [1366, 768] # Auto adjustable
-stimuli_freq = [10, 12, 14] # From lowest to highest, max 4
+stimuli_freq = [10, 12, 14, 66] # From lowest to highest, max 4
 
 window = visual.Window(screen_resolution, monitor="testMonitor",
                        units='pix', fullscr=False, color=[-1, -1, -1])
@@ -36,6 +40,7 @@ sign_stimuli = visual.Polygon(
 stimuli_pos = {stimuli_freq[0]: (0, 250),
                stimuli_freq[1]: (500, 250),
                stimuli_freq[2]: (-500, 250),
+               stimuli_freq[3]: (-5000, 2500),
 }
 
 stimuli_1 = visual.Rect(
@@ -78,39 +83,48 @@ stim_3 = visual.TextStim(window, str(stimuli_freq[2]) + 'hz',
 
 timer = core.CountdownTimer(5)
 
-n = 0
-while True:
-  color = sin(stimuli_freq[0]*pi*2*current_frame/60)
-  color_2 = sin(stimuli_freq[1]*pi*2*current_frame/60)
-  color_3 = sin(stimuli_freq[2]*pi*2*current_frame/60)
+while True: 
+    (data, addr) = mySocket.recvfrom(SIZE)
+    if not data == None:
+        stim = (int.from_bytes(data, "big"))
+        state = True
+        while state:
+            #(data, addr) = mySocket.recvfrom(SIZE)
 
-  current_stim = stimuli_order[n]
-  mySocket.send(bytes([current_stim]))
-  
-  if not timer.getTime() > 0:
-    timer.add(5)
-    n += 1
+            color = sin(stimuli_freq[0]*pi*2*current_frame/60)
+            color_2 = sin(stimuli_freq[1]*pi*2*current_frame/60)
+            color_3 = sin(stimuli_freq[2]*pi*2*current_frame/60)
 
+            current_stim = stim
+            #print(int.from_bytes(data, "big"))
 
-  sign_stimuli.pos = stimuli_pos[current_stim]
-  sign_stimuli.draw()
+            sign_stimuli.pos = stimuli_pos[current_stim]
+            sign_stimuli.draw()
 
-  stimuli_1.setFillColor([-1, color, -1])
-  stimuli_1.draw()
+            stimuli_1.setFillColor([-1, color, -1])
+            stimuli_1.draw()
 
-  stimuli_2.setFillColor([-1, color_2, -1])
-  stimuli_2.draw()
+            stimuli_2.setFillColor([-1, color_2, -1])
+            stimuli_2.draw()
 
-  stimuli_3.setFillColor([-1, color_3, -1])
-  stimuli_3.draw()
+            stimuli_3.setFillColor([-1, color_3, -1])
+            stimuli_3.draw()
 
-  # Text inside the box 
-  stim_1.draw()
-  stim_2.draw()
-  stim_3.draw()
-  
-  window.flip()
-  current_frame += 1
-  for key in event.getKeys():
-    if key in ['escape', 'q']:
-        core.quit()
+            # Text inside the box 
+            stim_1.draw()
+            stim_2.draw()
+            stim_3.draw()
+            
+            window.flip()
+            current_frame += 1
+
+            if not timer.getTime() > 0:
+                timer.add(5)
+                sign_stimuli.pos = stimuli_pos[current_stim]
+                sign_stimuli.draw()
+                timer.add(2)
+                state = False 
+
+            for key in event.getKeys():
+                if key in ['escape', 'q']:
+                    core.quit()
