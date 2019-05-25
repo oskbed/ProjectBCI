@@ -7,6 +7,7 @@
 # ----------------------------------------------------------------------------#
 #TODO SAVE RAW SIGNAL TO RAM
 
+from socket import socket, AF_INET, SOCK_DGRAM
 from time import gmtime, strftime
 import csv
 import serial
@@ -26,8 +27,18 @@ import openbci.cyton as bci
 import scipy.signal as sig
 import time
 #import matplotlib.pyplot as plt
-S_PORT_NUMBER = 5000
-S_SIZE = 1024
+import pickle
+
+# SERVER_IP = '192.168.0.18'
+# #SERVER_IP = '127.0.0.1'
+
+# PORT_NUMBER = 5000
+# SIZE = 1024
+# print("Test client sending packets to IP {0}, via port {1}\n".format(
+#     SERVER_IP, PORT_NUMBER))
+
+# mySocket = socket(AF_INET, SOCK_DGRAM)
+# mySocket.connect((SERVER_IP, PORT_NUMBER))
 
 class CcaLive(object):
     """CCA Application for SSVEP detection.
@@ -47,7 +58,7 @@ class CcaLive(object):
 
     """
     def __init__(self, sampling_rate=250, connect=True, port='',
-    port_arduino=None, electrodes=2, time_run=10, save=False, bandpass=None):
+        electrodes=2, time_run=10, save=False, ip_slave = 'localhost', time_stim=5):
 
         self.bci_port = port
         self.connect = connect
@@ -55,9 +66,10 @@ class CcaLive(object):
         self.electrodes = electrodes
         self.time_run = time_run
         self.save_to_file = save
-        self.port_arduino = port_arduino
-
+        #self.port_arduino = port_arduino
+        self.ip_slave = ip_slave
         self.reference_signals = []
+        self.time_stim = time_stim
 
         self.__fs = 1./sampling_rate
         self.__t = np.arange(0.0, 1.0, self.__fs)
@@ -65,7 +77,7 @@ class CcaLive(object):
         self.board = bci.OpenBCICyton(port=self.bci_port)
         self.board.print_register_settings()
         self.sampling_rate = sampling_rate
-        self.bandpass = bandpass
+        #self.bandpass = bandpass
 
         print ("================================")
         print ("  OpenBCI Cyton CCA Application ")
@@ -73,17 +85,6 @@ class CcaLive(object):
 
         self.streaming = mp.Event()
         self.terminate = mp.Event()
-
-        self.SERVER_IP = '127.0.0.1'
-
-
-        self.PORT_NUMBER = 5000
-        self.SIZE = 1024
-        print("Test client sending packets to IP {0}, via port {1}\n".format(self.SERVER_IP, self.PORT_NUMBER))
-
-        self.mySocket = socket(AF_INET, SOCK_DGRAM)
-        self.mySocket.connect((self.SERVER_IP, self.PORT_NUMBER))
-
 
         # if self.port_arduino != None:
         #     self.serial_arduino = serial.Serial(self.port_arduino, 9600)
@@ -107,21 +108,36 @@ class CcaLive(object):
         self.reference_signals.append(SignalReference(self.hz, self.__t))
         print ("Stimuli {} hz added!".format(self.hz))
 
+    def send_stims(self):
+        import sys
+
+        #SERVER_IP = '192.168.0.18'
+        SERVER_IP = str(self.ip_slave)
+        PORT_NUMBER = 5000
+        SIZE = 4096
+
+        mySocket = socket(AF_INET, SOCK_DGRAM)
+        mySocket.connect((SERVER_IP, PORT_NUMBER))
+
+        data_string = pickle.dumps([i.hz for i in self.reference_signals])
+    
+        mySocket.send(data_string)
+        print ("Standby!")
+        mySocket.close()
+
+
     def decission(self):
+        self.send_stims()
         status = input("Press Enter to start... ")
+        
         # if self.port_arduino:
         #     self.serial_arduino.write(b"L")
 
         if self.connect:
             self.initialize()
 
-        if self.port_arduino:
-            time.sleep(5)
-            #self.serial_arduino.write(b"L")
-
-
         # Compensate for packet correlation
-        time.sleep(self.time_run+1)
+        time.sleep(self.time_run+2)
         print("".join(["=" for x in range(32)]))
         print("END OF TRIAL")
         print("".join(["=" for x in range(32)]))
@@ -154,12 +170,12 @@ class CcaLive(object):
         # Board connection #
 
         self.correlation = CrossCorrelation(self.sampling_rate,
-                                            self.bandpass,
                                             self.electrodes,
                                             self.ref,
                                             self.save_to_file,
-                                            self.port_arduino,
-                                            self.mySocket)
+                                            self.ip_slave,
+                                            self.time_run,
+                                            self.time_stim,)
 
         self.board.start_streaming(handle_sample)
         self.board.disconnect()
@@ -254,11 +270,11 @@ class OnlineFilter(object):
 
 class CrossCorrelation(object):
     """CCA class; returns correlation value for each channel """
-    def __init__(self, sampling_rate, filters, channels_num, ref_signals, save_to_file, port_arduino, socket):
+    def __init__(self, sampling_rate, channels_num, ref_signals, save_to_file, ip_display, time_of_exp, stim_exp):
         self.signal_file = []
         self.packet_id = 0
         self.all_packets = 0
-        self.port_arduino = port_arduino
+        #self.port_arduino = port_arduino
         self.sampling_rate = sampling_rate
         self.rs = ref_signals
         self.sampling_rate = sampling_rate
@@ -270,30 +286,34 @@ class CrossCorrelation(object):
         self.logging = []
         #self.socket = socket
         self.hits = 0
+        self.stim_exp_time = stim_exp
         self.current_stimuli = None
         self.list_stimuli = []
-        self.socket = socket
+        #self.socket = socket
         self.raw_signal = 0 # TODO: Load entire signal to RAM and save afterwards.
-        c_stim = 0
 
-        self.stimuli_order = random.choices([10,12,14], k=21)
-        
+        self.c_stim = 0
 
+        self.stimuli_order = random.choices(
+            [i.hz for i in self.rs], k=(int(time_of_exp/self.stim_exp_time)+1))
+
+        print ("Stimuli in this trial", self.stimuli_order)
         self.flt = OnlineFilter()
         #self.serial_arduino = serial.Serial(self.port_arduino, 9600)
-        time.sleep(2)
-        #self.serial_arduino.write(b"H")
+        time.sleep(1)
 
-        # if filters == None:
-        #     if self.rs[-1].hz >= 49:
-        #         self.filter = ((int(self.rs[0]) - 2), (49))
-        #     else:
-        #         self.filter = ((int(self.rs[0].hz) - 2), ((int(self.rs[-1].hz)*2) + 4))
-        # else:
-        #     self.filter = filters
 
-        #print("Bandpass filter set to: ", self.filter[0], "/", self.filter[1])
+        SERVER_IP = ip_display
 
+        PORT_NUMBER = 5000
+        SIZE = 1024
+        print("Sending data to IP {0}, via port {1}\n".format(
+            SERVER_IP, PORT_NUMBER))
+
+        self.mySocket = socket(AF_INET, SOCK_DGRAM)
+        self.mySocket.connect((SERVER_IP, PORT_NUMBER))
+
+        self.mySocket.send(bytes([self.stimuli_order[self.c_stim]]))
     def acquire_data(self, packet):
         self.signal_window[self.packet_id] = self.filtering(packet)
         self.signal_file.append(packet)
@@ -305,14 +325,17 @@ class CrossCorrelation(object):
         if self.packet_id % self.sampling_rate == 0:
             #self.serial_arduino.write(b"H")
             self.all_packets += 1
-            if self.all_packets % 7 == 0:
-                mySocket.send(bytes([self.stimuli_order[c_stim]]))
-                c_stim=+ 1
+            if self.all_packets % self.stim_exp_time == 0:
+                self.c_stim += 1
+                self.mySocket.send(
+                        bytes([self.stimuli_order[self.c_stim]]))
+                
+
             #filtered = self.filtering(self.signal_window)
             if self.save_to_file:
                 self.save_file(np.squeeze(np.array(packet)))  # Is that good?
                 self.save_file(self.channels)
-                #self.save_file(self.list_stimuli)
+                
 
             self.correlate(self.signal_window)
             self.make_decission()
@@ -393,16 +416,36 @@ class CrossCorrelation(object):
 
         self.logging.append(self.ssvep_display.copy())
 
-        # max = 0
-        # index = 0
-        # for i in range(len(self.channels)):
-        #     if (self.channels[i][2]) > max:
-        #         max = self.channels[i][2]
-        #         index = i
+        current_stimuli = int(self.stimuli_order[self.c_stim])
+        index_of_max_corr = ([self.channels[i][2]
+                              for i in range(len(self.channels[0]))])
 
-        # if (index + 1) == int(self.current_stimuli):
-        #     print("Zgodny")
+        print(self.rs[np.argmax(index_of_max_corr)].hz)
+        print(current_stimuli)
+
+        if self.rs[np.argmax(index_of_max_corr)].hz == current_stimuli:
+            self.status_stim = ("Matched!")
+            self.hits += 1
+        else:
+            self.status_stim = ("Mismatch")
+
+        # print([self.channels[i][2] for i in range(len(self.channels[0]))])
+        # print(index_of_max_corr)
+        # print(np.argmax(index_of_max_corr))
+
+        # if self.rs[index_of_max_corr].hz == current_stimuli:
+        #     print("Matched!")
         #     self.hits += 1
+        # else:
+        #     print("Mismatch")
+
+        #print ([self.channels[i][2] for i in range(len(self.channels[0]))])
+
+        # if (index + 1) == int(self.stimuli_order[self.c_stim]):
+        #     print("Matched!")
+        #     self.hits += 1
+        # else:
+        #     print ("Mismatch")
 
 
 
@@ -418,6 +461,8 @@ class CrossCorrelation(object):
                   self.channels[i][2]))
         print("Stimuli detection: {0}".format([str(self.ssvep_display[i])
               for i in range(len(self.ssvep_display))]))
-        #print("Displayed stimuli: ", int(stimul))
+        print("Displayed stimuli: ", int(self.stimuli_order[self.c_stim]))
         print("========")
-       # print("Global hits: ", self.hits)
+        print (self.status_stim)
+        print("Hits: ", self.hits)
+        print("x=x=x=x=x=x=x=x=x=x=x=x=x=x=x=x=x")

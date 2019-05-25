@@ -35,12 +35,12 @@ import pandas as pd
 
 test = app.CcaLive(
 port='/dev/tty.usbserial-DM00CVLC',
-port_arduino='',
 sampling_rate=250,
 connect=True,
 electrodes=2,
-time_run=15,
-save=True
+time_run=30,
+save=False,
+ip_slave='192.168.0.17'
 )
 #==============================================================================#
 #==============================================================================#
@@ -63,10 +63,11 @@ print("".join(["=" for x in range(32)]))
 # Add references signal /
 # Stimulus for experiment. Max amount = 4.
 # ========================== #
+test.add_stimuli(11)
 test.add_stimuli(12)
-test.add_stimuli(13)
 test.add_stimuli(14)
 # ========================== #
+
 
 SUBJ = int(input("Subject: "))
 

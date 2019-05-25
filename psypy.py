@@ -10,15 +10,16 @@ import time
 from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM
 import sys
 
-PORT_NUMBER = 5000
-SIZE = 1024
+# PORT_NUMBER = 5000
+# SIZE = 1024
 
-hostName = gethostbyname('0.0.0.0')
+# hostName = gethostbyname('0.0.0.0')
 
-mySocket = socket(AF_INET, SOCK_DGRAM)
-mySocket.bind((hostName, PORT_NUMBER))
+# mySocket = socket(AF_INET, SOCK_DGRAM)
+# mySocket.setblocking(1)
+# mySocket.bind((hostName, PORT_NUMBER))
 
-print("Test server listening on port {0}\n".format(PORT_NUMBER))
+#print("Test server listening on port {0}\n".format(PORT_NUMBER))
 
 screen_resolution = [1366, 768] # Auto adjustable
 stimuli_freq = [10, 12, 14, 66] # From lowest to highest, max 4
@@ -83,48 +84,69 @@ stim_3 = visual.TextStim(window, str(stimuli_freq[2]) + 'hz',
 
 timer = core.CountdownTimer(5)
 
-while True: 
-    (data, addr) = mySocket.recvfrom(SIZE)
-    if not data == None:
-        stim = (int.from_bytes(data, "big"))
-        state = True
-        while state:
-            #(data, addr) = mySocket.recvfrom(SIZE)
+# while True: 
+#     (data, addr) = mySocket.recvfrom(SIZE)
+#     if not data == None:
+#         stim = (int.from_bytes(data, "big"))
+#         state = True
 
-            color = sin(stimuli_freq[0]*pi*2*current_frame/60)
-            color_2 = sin(stimuli_freq[1]*pi*2*current_frame/60)
-            color_3 = sin(stimuli_freq[2]*pi*2*current_frame/60)
+def open_socket():
+    PORT_NUMBER = 5000
 
-            current_stim = stim
-            #print(int.from_bytes(data, "big"))
 
-            sign_stimuli.pos = stimuli_pos[current_stim]
-            sign_stimuli.draw()
+    SIZE = 1024
 
-            stimuli_1.setFillColor([-1, color, -1])
-            stimuli_1.draw()
+    hostName = gethostbyname('0.0.0.0')
 
-            stimuli_2.setFillColor([-1, color_2, -1])
-            stimuli_2.draw()
+    mySocket = socket(AF_INET, SOCK_DGRAM)
+    mySocket.setblocking(1)
+    mySocket.bind((hostName, PORT_NUMBER))
 
-            stimuli_3.setFillColor([-1, color_3, -1])
-            stimuli_3.draw()
+    print("Test server listening on port {0}\n".format(PORT_NUMBER))
+    state = True
+    while state:
+            (data, addr) = mySocket.recvfrom(SIZE)
+            if not data == None:
+                stim = (int.from_bytes(data, "big"))
+                print (stim)
+                if stim == 88:
+                    state = False
 
-            # Text inside the box 
-            stim_1.draw()
-            stim_2.draw()
-            stim_3.draw()
-            
-            window.flip()
-            current_frame += 1
+while True:
+    #(data, addr) = mySocket.recvfrom(SIZE)
 
-            if not timer.getTime() > 0:
-                timer.add(5)
-                sign_stimuli.pos = stimuli_pos[current_stim]
-                sign_stimuli.draw()
-                timer.add(2)
-                state = False 
+    color = sin(stimuli_freq[0]*pi*2*current_frame/60)
+    color_2 = sin(stimuli_freq[1]*pi*2*current_frame/60)
+    color_3 = sin(stimuli_freq[2]*pi*2*current_frame/60)
 
-            for key in event.getKeys():
-                if key in ['escape', 'q']:
-                    core.quit()
+    #print(int.from_bytes(data, "big"))
+
+    sign_stimuli.pos = stimuli_pos[10]
+    sign_stimuli.draw()
+
+    stimuli_1.setFillColor([-1, color, -1])
+    stimuli_1.draw()
+
+    stimuli_2.setFillColor([-1, color_2, -1])
+    stimuli_2.draw()
+
+    stimuli_3.setFillColor([-1, color_3, -1])
+    stimuli_3.draw()
+
+    # Text inside the box 
+    stim_1.draw()
+    stim_2.draw()
+    stim_3.draw()
+    
+    window.flip()
+    current_frame += 1
+
+    for key in event.getKeys():
+        if key in ['escape', 'q']:
+            core.quit()
+
+# if __name__ == '__main__':
+#     open_socket()
+#     #p = Process(target=open_socket)
+#     #p.start()
+#     #p.join()
