@@ -6,9 +6,35 @@ import multiprocessing as mp
 import sys
 from socket import socket, AF_INET, SOCK_DGRAM
 import time
+import pickle
 
 from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM
 import sys
+
+
+class getStimulies(object):
+    def __init__(self, PORT_NUMBER=5000, SIZE=4096):
+        print("Initializing...")
+        self.PORT_NUMBER = PORT_NUMBER
+
+        self.SIZE = SIZE
+
+        self.hostName = gethostbyname('0.0.0.0')
+
+        self._stimuli_list = []
+
+    def getStims(self):
+        self.mySocket = socket(AF_INET, SOCK_DGRAM)
+        self.mySocket.settimeout(60.0)
+        self.mySocket.bind((self.hostName, self.PORT_NUMBER))
+        print ("Waiting for data from BCI Application. Timeout(60s)")
+        while True:
+            (data, addr) = self.mySocket.recvfrom(self.SIZE)
+            if not data == None:
+                self._stimuli_list = pickle.loads(data)
+                self.mySocket.close()
+                print("Data received! Closing connection...")
+                return self._stimuli_list
 
 class ControlUnitSocket(object):
     def __init__(self, PORT_NUMBER=5000, SIZE=1024):
@@ -56,14 +82,14 @@ class ControlUnitSocket(object):
 
 
 class display(object):
-    def __init__(self, socket):
+    def __init__(self, socket, stims):
         
         self.socket = socket
         time.sleep(1)
         print("Initializing connection...")
         self.socket.openConnection()
         self.screen_resolution = [1366, 768] # Auto adjustable
-        self.stimuli_freq = [10, 12, 14, 0] # From lowest to highest, max 4
+        self.stimuli_freq = stims  # From lowest to highest, max 4
 
         self.window = visual.Window(self.screen_resolution, monitor="testMonitor",
                             units='pix', fullscr=False, color=[-1, -1, -1])
@@ -80,7 +106,7 @@ class display(object):
         self.stimuli_pos = {self.stimuli_freq[0]: (0, 250),
                     self.stimuli_freq[1]: (500, 250),
                     self.stimuli_freq[2]: (-500, 250),
-                    self.stimuli_freq[3]: (-5000, 2500),
+                    0: (-5000, 2500), # OFF SCREEN
         }
 
         self.stimuli_1 = visual.Rect(
@@ -166,7 +192,4 @@ class display(object):
 
 
 if __name__ == "__main__":
-    mySocket = ControlUnitSocket()
-    myDisplay = display(socket=mySocket)
-
-    #mySocket.openConnection()
+    myDisplay = display(stims=getStimulies().getStims(), socket=ControlUnitSocket())
