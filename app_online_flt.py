@@ -280,7 +280,8 @@ class CrossCorrelation(object):
         self.sampling_rate = sampling_rate
         self.channels_num = channels_num
         self.save_to_file = save_to_file
-        self.signal_window = np.zeros(shape=(sampling_rate, channels_num))
+        self.signal_window = np.zeros(shape=(sampling_rate, channels_num + 1))
+        self.signal_window_filtered = np.zeros(shape=(sampling_rate, channels_num))
         self.channels = np.zeros(shape=(len(self.rs), 3), dtype=tuple)
         self.ssvep_display = np.zeros(shape=(len(self.rs), 1), dtype=int)
         self.logging = []
@@ -289,7 +290,7 @@ class CrossCorrelation(object):
         self.stim_exp_time = stim_exp
         self.current_stimuli = None
         self.list_stimuli = []
-        #self.socket = socket
+
         self.raw_signal = 0 # TODO: Load entire signal to RAM and save afterwards.
 
         self.c_stim = 0
@@ -315,15 +316,13 @@ class CrossCorrelation(object):
 
         self.mySocket.send(bytes([self.stimuli_order[self.c_stim]]))
     def acquire_data(self, packet):
-        self.signal_window[self.packet_id] = self.filtering(packet)
-        self.signal_file.append(packet)
+        #self.signal_window[self.packet_id] = self.filtering(packet)
+        self.signal_window[self.packet_id] = np.append(
+            packet, self.stimuli_order[self.c_stim])
+        self.signal_window_filtered[self.packet_id] = self.filtering(packet)
         self.packet_id += 1
-        #(data, addr) = self.socket.recvfrom(S_SIZE)
-        #self.current_stimuli = (int.from_bytes(data, "big"))
-        #self.list_stimuli.append(self.current_stimuli)
 
         if self.packet_id % self.sampling_rate == 0:
-            #self.serial_arduino.write(b"H")
             self.all_packets += 1
             if self.all_packets % self.stim_exp_time == 0:
                 self.c_stim += 1
@@ -333,11 +332,10 @@ class CrossCorrelation(object):
 
             #filtered = self.filtering(self.signal_window)
             if self.save_to_file:
-                self.save_file(np.squeeze(np.array(packet)))  # Is that good?
+                self.save_file(self.signal_window)  # Is that good?
                 self.save_file(self.channels)
                 
-
-            self.correlate(self.signal_window)
+            self.correlate(self.signal_window_filtered)
             self.make_decission()
             self.print_results()
             self.packet_id = 0
@@ -345,7 +343,7 @@ class CrossCorrelation(object):
 
     def save_file(self, list_file):
 
-        if list_file.shape == (self.sampling_rate, self.channels_num):
+        if list_file.shape == (self.sampling_rate, self.channels_num + 1):
             myFile = open('outputs/signal_raw' + '.csv', 'a')
 
             with myFile:
@@ -372,7 +370,7 @@ class CrossCorrelation(object):
 
     def correlate(self, signal):
         for ref in range(len(self.rs)):
-            sample = signal
+            sample = signal # [:, 0:self.channels_num]
 
             cca = CCA(n_components=1)
             cca_ref = CCA(n_components=1)
@@ -420,8 +418,8 @@ class CrossCorrelation(object):
         index_of_max_corr = ([self.channels[i][2]
                               for i in range(len(self.channels[0]))])
 
-        print(self.rs[np.argmax(index_of_max_corr)].hz)
-        print(current_stimuli)
+        #print(self.rs[np.argmax(index_of_max_corr)].hz)
+        #print(current_stimuli)
 
         if self.rs[np.argmax(index_of_max_corr)].hz == current_stimuli:
             self.status_stim = ("Matched!")
@@ -465,4 +463,4 @@ class CrossCorrelation(object):
         print("========")
         print (self.status_stim)
         print("Hits: ", self.hits)
-        print("x=x=x=x=x=x=x=x=x=x=x=x=x=x=x=x=x")
+        print("================================")
