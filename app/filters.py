@@ -1,3 +1,5 @@
+import numpy as np
+
 class OnlineIIRFilter(object):
     def __init__(self):
         self.prev_x = np.zeros((8, 5))

@@ -7,15 +7,15 @@ class SignalReference(object):
 
         self.hz = hz
 
-        __t = np.arange(0.0, 1.0, 1./sampling_rate)
+        __t_arr = np.arange(0.0, 1.0, 1./sampling_rate)
 
-        self.reference_signals = np.zeros(shape=(len(__t), len(mod_list)*2))
+        self.reference_signals = np.zeros(shape=(len(mod_list)*2, len(__t_arr)))
 
-        __references = []
+        references = []
 
         for modifier in mod_list:
-            __references.append(np.array([np.sin(2*np.pi*i*self.hz*modifier) for i in __t]))
-            __references.append(np.array([np.cos(2*np.pi*i*self.hz*modifier) for i in __t]))
+            references.append(np.array([np.sin(2*np.pi*i*self.hz*modifier) for i in __t_arr]))
+            references.append(np.array([np.cos(2*np.pi*i*self.hz*modifier) for i in __t_arr]))
 
-        for i, ref in enumerate(__references):
-            self.reference_signals[:, i] = ref
+        for channel, ref in enumerate(references):
+            self.reference_signals[channel] = ref

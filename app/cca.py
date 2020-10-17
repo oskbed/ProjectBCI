@@ -1,9 +1,11 @@
-from .reference import SignalReference
+from reference import SignalReference
+from sklearn.cross_decomposition import CCA
 
 
 class CrossCorrelation:
+    def __init__(self):
+        self.stimuli_reference_signals = []
 
-    @classmethod
     def get_score(self, signal, reference):
         cca = CCA(n_components=0)
 
@@ -13,6 +15,5 @@ class CrossCorrelation:
 
         return abs(np.corrcoef(u.T, v.T)[0, 1])
 
-    @classmethod
-    def get_reference_signal(self, hz):
-        return SignalReference(hz)
+    def add_reference_signal(self, hz):
+        return self.stimuli_reference_signals.append(SignalReference(hz).reference_signals)

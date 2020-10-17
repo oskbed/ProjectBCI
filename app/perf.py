@@ -3,6 +3,7 @@ from sklearn.cross_decomposition import CCA
 import numpy as np
 import time
 
+
 from functools import wraps
 from time import time
 

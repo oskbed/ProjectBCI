@@ -33,3 +33,6 @@ class DefaultBoard():
     def release_session(self):
         self._logger(f'Device {self.board_name} is releasing session!')
         self.board.release_session()
+
+    def get_current_board_data(self, number_of_samples):
+        return self.board.get_current_board_data(number_of_samples)
