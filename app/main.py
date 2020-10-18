@@ -58,6 +58,6 @@ method = CrossCorrelation()
 flt = OnlineIIRFilter()
 
 test = Controller(board=board, classification_method=method, online_filter=flt)
-test.set_stimulus([19,20,22])
+test.set_stimulus([19,120,22])
 test.board.establish_session()
 test.board.start_streaming()
