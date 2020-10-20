@@ -11,6 +11,9 @@ from cca import CrossCorrelation
 from classifier import Classifier
 
 
+import brainflow
+from brainflow.board_shim import BoardShim, BrainFlowInputParams, LogLevels, BoardIds
+
 file_handler = logging.FileHandler(filename='tmp.log')
 stdout_handler = logging.StreamHandler(sys.stdout)
 handlers = [stdout_handler] # file_handler
@@ -52,12 +55,12 @@ class Controller():
         # From display and processed
         pass
 
-
-board = DefaultBoard({}.get('board_config', {}))
+params = BrainFlowInputParams()
+board = BoardShim(BoardIds.SYNTHETIC_BOARD.value, params)
 method = CrossCorrelation()
 flt = OnlineIIRFilter()
 
 test = Controller(board=board, classification_method=method, online_filter=flt)
 test.set_stimulus([19,120,22])
-test.board.establish_session()
-test.board.start_streaming()
+test.board.prepare_session()
+test.board.start_stream()

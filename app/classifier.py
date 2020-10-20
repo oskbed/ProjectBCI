@@ -21,6 +21,7 @@ class Classifier:
         self.channels = 2
         self.sampling_rate = 256
         self.sampling_interval = 1 # second
+        self.display = False
 
     # def _select_method(self, selected):
     #     return [method.value for method in ClassifierMethods if method.name == selected]
@@ -35,22 +36,22 @@ class Classifier:
     def process_data(self):
         scores = []
         data = np.array(self.board.get_current_board_data(self.sampling_rate))[:self.channels]
-        filtered = np.zeros(shape=(self.channels, self.sampling_rate))
+        filtered = np.zeros(shape=(self.sampling_rate, self.channels))
 
         for channel_id, channel_data in enumerate(data):
             for packet_id, packet in enumerate(channel_data):
-                filtered[channel_id, packet_id] = self.filter.filterIIR(packet, channel_id)
-
-        filtered = filtered.reshape(-1, self.channels)
+                filtered[packet_id, channel_id] = self.filter.filterIIR(packet, channel_id)
 
         for n, refs in enumerate(self.method.stimuli_reference_signals):
-            _norm = self.method.get_score(filtered, refs.reference_signals[0:2].reshape(-1,2))
-            _harm = self.method.get_score(filtered, refs.reference_signals[2:4].reshape(-1,2))
-            _sub = self.method.get_score(filtered, refs.reference_signals[4:6].reshape(-1,2))
-            _all = self.method.get_score(filtered, refs.reference_signals.reshape(-1,6))
+            _norm = self.method.get_score(filtered, refs.signal[:, 0:2])
+            _harm = self.method.get_score(filtered, refs.signal[:, 2:4])
+            _sub = self.method.get_score(filtered, refs.signal[:, 4:6])
+            _all = self.method.get_score(filtered, refs.signal[:, :])
             scores.append(Detection(refs.hz, _norm, _harm, _sub, _all))
 
         return scores
+
+
 class Detection:
     def __init__(self, stimuli_hz, normal, harmonic, subharmonic, all_):
         self.stimuli_hz = stimuli_hz
