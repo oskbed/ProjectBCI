@@ -1,17 +1,18 @@
 #!/usr/bin/venv python -W ignore::DeprecationWarning
 # -*- coding: utf-8 -*-
 
-import brainflow
-from boards import DefaultBoard
-from utils import logger
 import sys
-from filters import OnlineIIRFilter
+
+import brainflow
+from brainflow.board_shim import (BoardIds, BoardShim, BrainFlowInputParams,
+                                  LogLevels)
+
+from socket import gethostbyname, gethostname
+from boards import DefaultBoard
 from cca import CrossCorrelation
 from classifier import Classifier
-from socket import socket, gethostbyname, AF_INET, SOCK_DGRAM, gethostname, timeout
-import pickle
-import brainflow
-from brainflow.board_shim import BoardShim, BrainFlowInputParams, LogLevels, BoardIds
+from filters import OnlineIIRFilter
+from utils import logger, send_through_socket
 
 logger = logger('Controller')
 
@@ -28,33 +29,20 @@ class Controller():
         self.board = board
         self.classification_method = classification_method
         self.online_filter = online_filter
+        self.remote_display = remote_display
         self.classifier = Classifier(board=board, method=classification_method, flt=online_filter)
 
-        if remote_display:
-            self.display_comms_port = 2092
-            self.buffer_size = 4096
-            self.ip_address_host = gethostbyname(gethostname())
-
-    def _send_through_socket(self, data):
-        sender = socket(AF_INET, SOCK_DGRAM)
-        sender.connect((self.ip_address_host, self.display_comms_port))
-
-        pickled_data = pickle.dumps(data)
-    
-        sender.send(pickled_data)
-        sender.close()
-    
-    def _receive_through_socket(self):
-        pass
-
+        if self.remote_display:
+            # By default, the same computer. Format IP, PORT
+            self.display_address = gethostbyname(gethostname()), 2092
 
     def set_stimulus(self, stims: list = []):
         for stimulus in stims:
             self.classifier.method.add_reference_signal(stimulus)
 
-    def set_stimulus_display(self, stims: list = []):
+    def set_stimulus_on_display(self, stims: list = []):
         logger.info('Establishing connection with remote display... Be patient.')
-        self._send_through_socket(stims)
+        send_through_socket(self.display_address, stims)
 
         #prompt = input('Is remote display ready? Y/N/A \n').lower()
 
@@ -65,6 +53,7 @@ class Controller():
     def get_current_data(self, print_stats=False):
         # From display and processed
         pass
+
 
 params = BrainFlowInputParams()
 board = BoardShim(BoardIds.SYNTHETIC_BOARD.value, params)

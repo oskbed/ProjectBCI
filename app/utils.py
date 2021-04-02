@@ -3,6 +3,18 @@ import matplotlib.pyplot as plt
 import time
 import logging
 import sys
+from socket import (AF_INET, SOCK_DGRAM, gethostbyname, gethostname, socket,
+                    timeout)
+import pickle
+
+
+class SocketTimeout(BaseException):
+    '''Exception raised in case listener do not receive any data in time.'''
+    pass
+
+
+LOG_FILENAME = 'system.log'
+
 
 def get_signal_plot(raw, filtered):
     t = np.arange(0.0, 1.0, 1./256)
@@ -20,7 +32,8 @@ def get_signal_plot(raw, filtered):
     fig.tight_layout()
     plt.show()
 
-def logger(logger_name, logger_file='diagnostics.log', logger_level=logging.DEBUG):
+
+def logger(logger_name, logger_file=LOG_FILENAME, logger_level=logging.DEBUG):
     file_handler = logging.FileHandler(filename=logger_file)
     stdout_handler = logging.StreamHandler(sys.stdout)
     handlers = [stdout_handler, file_handler]
@@ -32,3 +45,29 @@ def logger(logger_name, logger_file='diagnostics.log', logger_level=logging.DEBU
     )
 
     return logging.getLogger(logger_name)
+
+
+def send_through_socket(address: tuple, payload, buffer_size=4096, sustainable=False):
+    sender = socket(AF_INET, SOCK_DGRAM)
+    sender.connect((address))
+
+    pickled_data = pickle.dumps(payload)
+    sender.send(pickled_data)
+    if not sustainable:
+        sender.close()
+
+
+def receive_through_socket(address: tuple, buffer_size=4096, timeout=None):
+    receiver = socket(AF_INET, SOCK_DGRAM)
+    receiver.settimeout(timeout)
+    receiver.bind((address))
+
+    try:
+        while True:
+            (data, addr) = receiver.recvfrom(buffer_size)
+            if data is not None:
+                return pickle.loads(data)
+    except Exception as e:
+        raise SocketTimeout(f"Socket timeout! Didn't receive any data in defined {timeout} seconds timeout!")
+    finally:
+        receiver.close()

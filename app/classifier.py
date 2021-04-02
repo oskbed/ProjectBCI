@@ -6,8 +6,10 @@ import filters
 import numpy as np
 from utils import *
 
+
 class ClassifierMethods(enum.Enum):
     CCA = cca.CrossCorrelation()
+
 
 class ClassifierDataFilters(enum.Enum):
     IIR = filters.OnlineIIRFilter()
